@@ -16,6 +16,9 @@ pub mod panel;
 pub mod vehicle;
 pub mod wind;
 
+#[cfg(feature = "cfd")]
+pub mod cfd;
+
 #[cfg(feature = "logging")]
 pub mod logging;
 
@@ -31,3 +34,6 @@ pub use airfoil::{NacaProfile, SurfacePoints};
 pub use panel::{Panel, PanelSolution};
 pub use vehicle::AeroBody;
 pub use wind::WindField;
+
+#[cfg(feature = "cfd")]
+pub use cfd::{AirfoilCfd, AirfoilCfdConfig, CfdSnapshot};

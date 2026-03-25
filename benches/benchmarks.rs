@@ -295,4 +295,48 @@ criterion_group!(
     bench_panel_solve_multi,
     bench_panel_cambered,
 );
+
+// --- CFD benchmarks (feature-gated) ---
+
+#[cfg(feature = "cfd")]
+fn cfd_config_100x50() -> pavan::cfd::AirfoilCfdConfig {
+    let mut cfg = pavan::cfd::AirfoilCfdConfig::default_for(50.0, 0.0);
+    cfg.grid_nx = 100;
+    cfg.grid_ny = 50;
+    cfg.domain_size = (10.0, 5.0);
+    cfg.dt = 0.001;
+    cfg.pressure_iterations = 20;
+    cfg.use_multigrid = false;
+    cfg.surface_points = 60;
+    cfg
+}
+
+#[cfg(feature = "cfd")]
+fn bench_cfd_new(c: &mut Criterion) {
+    let profile = pavan::airfoil::NacaProfile::naca0012();
+    let cfg = cfd_config_100x50();
+    c.bench_function("cfd/airfoil_new_100x50", |b| {
+        b.iter(|| pavan::cfd::AirfoilCfd::new(black_box(&profile), black_box(&cfg)));
+    });
+}
+
+#[cfg(feature = "cfd")]
+fn bench_cfd_step(c: &mut Criterion) {
+    let profile = pavan::airfoil::NacaProfile::naca0012();
+    let cfg = cfd_config_100x50();
+    c.bench_function("cfd/step_100x50", |b| {
+        b.iter_batched(
+            || pavan::cfd::AirfoilCfd::new(&profile, &cfg).expect("new"),
+            |mut cfd| cfd.step().expect("step"),
+            criterion::BatchSize::SmallInput,
+        );
+    });
+}
+
+#[cfg(feature = "cfd")]
+criterion_group!(cfd_benches, bench_cfd_new, bench_cfd_step,);
+#[cfg(not(feature = "cfd"))]
 criterion_main!(benches);
+
+#[cfg(feature = "cfd")]
+criterion_main!(benches, cfd_benches);

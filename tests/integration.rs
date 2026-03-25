@@ -255,3 +255,56 @@ fn panel_method_alpha_sweep() {
         );
     }
 }
+
+// --- CFD integration tests (feature-gated) ---
+
+#[cfg(feature = "cfd")]
+mod cfd_tests {
+    use pavan::airfoil::NacaProfile;
+    use pavan::cfd::{self, AirfoilCfd, AirfoilCfdConfig, CfdSnapshot};
+    use pavan::panel;
+
+    fn small_config() -> AirfoilCfdConfig {
+        let mut cfg = AirfoilCfdConfig::default_for(50.0, 0.0);
+        cfg.grid_nx = 60;
+        cfg.grid_ny = 30;
+        cfg.domain_size = (6.0, 3.0);
+        cfg.dt = 0.001;
+        cfg.pressure_iterations = 20;
+        cfg.use_multigrid = false;
+        cfg.surface_points = 40;
+        cfg
+    }
+
+    #[test]
+    fn full_pipeline_panel_to_cfd() {
+        let profile = NacaProfile::naca0012();
+        let cfg = small_config();
+        let mut cfd = AirfoilCfd::new(&profile, &cfg).expect("new");
+
+        // Panel solve for warm start
+        let (upper, lower) = profile.surface_coordinates(60);
+        let panels = panel::panels_from_surface(&upper, &lower);
+        let sol = panel::solve(&panels, 0.0).expect("panel solve");
+        cfd::init_from_panel(&mut cfd, &sol, &panels).expect("init");
+
+        // Run CFD
+        let history = cfd.run(5).expect("run");
+        assert_eq!(history.len(), 5);
+        assert!(history[4].max_speed > 0.0);
+    }
+
+    #[test]
+    fn serde_round_trip_cfd_snapshot() {
+        // Get a real snapshot from a step
+        let profile = NacaProfile::naca0012();
+        let cfg = small_config();
+        let mut cfd = AirfoilCfd::new(&profile, &cfg).expect("new");
+        let snap = cfd.step().expect("step");
+
+        let json = serde_json::to_string(&snap).expect("serialize");
+        let back: CfdSnapshot = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(back.step, snap.step);
+        assert!((back.cl - snap.cl).abs() < f64::EPSILON);
+    }
+}
