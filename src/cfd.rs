@@ -177,6 +177,12 @@ impl AirfoilCfd {
             &mut surface_normals,
         );
 
+        if surface_cells.is_empty() {
+            return Err(PavanError::InvalidGeometry(
+                "airfoil rasterization produced no surface cells; increase grid resolution".into(),
+            ));
+        }
+
         // Zero velocity in solid cells
         for &(cx, cy) in &surface_cells {
             let idx = grid.idx(cx, cy);
@@ -328,41 +334,49 @@ impl AirfoilCfd {
     }
 
     /// Integrate pressure around the airfoil surface to get Cl, Cd, Cm.
+    ///
+    /// Pravash stores pressure in solver units (m²/s) from the projection step.
+    /// Physical pressure per density: p_phys/ρ = p_grid / dt.
+    /// Force coefficient: Cf = 2/(V²·c) · Σ (p_i/dt) · n_i · dx.
     fn integrate_surface_forces(&self) -> (f64, f64, f64) {
-        if self.surface_cells.is_empty() || self.q_inf <= 0.0 {
+        let dt = self.grid_config.dt;
+        if self.surface_cells.is_empty() || self.q_inf <= 0.0 || dt <= 0.0 {
             return (0.0, 0.0, 0.0);
         }
 
         let nx = self.grid.nx;
         let x_offset = nx / 4;
-        let cos_a = self.freestream.0 / (self.freestream.0.hypot(self.freestream.1)).max(1e-20);
-        let sin_a = self.freestream.1 / (self.freestream.0.hypot(self.freestream.1)).max(1e-20);
+        let v_mag = self.freestream.0.hypot(self.freestream.1).max(1e-20);
+        let cos_a = self.freestream.0 / v_mag;
+        let sin_a = self.freestream.1 / v_mag;
 
         let mut cn = 0.0; // normal to chord (body frame)
         let mut ca = 0.0; // along chord (body frame)
         let mut cm = 0.0;
 
         let chord_m = self.chord_cells as f64 * self.dx;
+        let v_sq = v_mag * v_mag;
 
         for (i, &(cx, cy)) in self.surface_cells.iter().enumerate() {
             let idx = cy * nx + cx;
-            let p = self.grid.pressure[idx];
+            // Convert solver pressure to physical pressure/ρ
+            let p_phys = self.grid.pressure[idx] / dt;
             let (nx_i, ny_i) = self.surface_normals[i];
 
-            // Force contribution from this cell
-            let fx = p * nx_i * self.dx;
-            let fy = p * ny_i * self.dx;
+            // Force contribution from this cell (per unit density)
+            let fx = p_phys * nx_i * self.dx;
+            let fy = p_phys * ny_i * self.dx;
 
             cn += fy;
             ca += fx;
 
-            // Moment about quarter-chord
+            // Moment about quarter-chord (nose-up positive)
             let x_body = (cx as f64 - x_offset as f64) * self.dx;
             cm -= fy * (x_body - 0.25 * chord_m);
         }
 
-        // Normalize by dynamic pressure × chord
-        let norm = self.q_inf * chord_m;
+        // Normalize: Cn = 2·cn / (V²·c), same for Ca, Cm
+        let norm = 0.5 * v_sq * chord_m;
         if norm <= 0.0 {
             return (0.0, 0.0, 0.0);
         }
@@ -718,5 +732,93 @@ mod tests {
         let back: AirfoilCfdConfig = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(back.grid_nx, cfg.grid_nx);
         assert!((back.altitude - cfg.altitude).abs() < f64::EPSILON);
+    }
+
+    // --- Validation tests from audit ---
+
+    #[test]
+    fn kinematic_viscosity_sea_level() {
+        // ISA sea level: μ ≈ 1.79e-5 Pa·s, ρ = 1.225 kg/m³ → ν ≈ 1.46e-5 m²/s
+        let rho = crate::atmosphere::standard_density(0.0);
+        let temp = crate::atmosphere::standard_temperature(0.0);
+        let mu = crate::forces::air_dynamic_viscosity(temp);
+        let nu = mu / rho;
+        assert!(
+            (nu - 1.46e-5).abs() < 0.1e-5,
+            "kinematic viscosity at sea level should be ~1.46e-5, got {nu}"
+        );
+    }
+
+    #[test]
+    fn solid_cells_have_zero_velocity_after_step() {
+        let profile = NacaProfile::naca0012();
+        let cfg = default_config();
+        let mut cfd = AirfoilCfd::new(&profile, &cfg).expect("new");
+        cfd.step().expect("step");
+
+        for y in 0..cfd.grid.ny {
+            for x in 0..cfd.grid.nx {
+                let idx = y * cfd.grid.nx + x;
+                if cfd.solid[idx] {
+                    assert_eq!(cfd.grid.vx[idx], 0.0, "solid cell ({x},{y}) vx != 0");
+                    assert_eq!(cfd.grid.vy[idx], 0.0, "solid cell ({x},{y}) vy != 0");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn inflow_remains_freestream_after_step() {
+        let profile = NacaProfile::naca0012();
+        let cfg = default_config();
+        let mut cfd = AirfoilCfd::new(&profile, &cfg).expect("new");
+        cfd.step().expect("step");
+
+        // Left column should be freestream
+        for y in 0..cfd.grid.ny {
+            let idx = y * cfd.grid.nx;
+            assert!(
+                (cfd.grid.vx[idx] - cfd.freestream.0).abs() < 1e-10,
+                "inflow vx at y={y} should be freestream"
+            );
+        }
+    }
+
+    #[test]
+    fn grid_idx_convention_matches() {
+        let profile = NacaProfile::naca0012();
+        let cfg = default_config();
+        let cfd = AirfoilCfd::new(&profile, &cfg).expect("new");
+        // Verify row-major: idx(x, y) = y * nx + x
+        assert_eq!(cfd.grid.idx(5, 3), 3 * cfd.grid.nx + 5);
+    }
+
+    #[test]
+    fn surface_normals_point_outward() {
+        let profile = NacaProfile::naca0012();
+        let cfg = default_config();
+        let cfd = AirfoilCfd::new(&profile, &cfg).expect("new");
+        let y_center = cfd.grid.ny / 2;
+
+        // Upper surface normals should have positive ny (pointing up, away from body)
+        // Lower surface normals should have negative ny (pointing down, away from body)
+        let mut has_up = false;
+        let mut has_down = false;
+        for (i, &(_, cy)) in cfd.surface_cells.iter().enumerate() {
+            let (_, ny_i) = cfd.surface_normals[i];
+            if cy > y_center {
+                // Upper surface cell
+                if ny_i > 0.0 {
+                    has_up = true;
+                }
+            } else if cy < y_center {
+                // Lower surface cell
+                if ny_i < 0.0 {
+                    has_down = true;
+                }
+            }
+        }
+        assert!(has_up, "upper surface should have upward normals");
+        assert!(has_down, "lower surface should have downward normals");
     }
 }
