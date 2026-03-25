@@ -3,6 +3,7 @@ use pavan::boundary;
 use pavan::forces::{self, AeroForce};
 use pavan::panel;
 use pavan::vehicle::AeroBody;
+use pavan::vlm;
 use pavan::wind::WindField;
 use pavan::*;
 
@@ -254,6 +255,60 @@ fn panel_method_alpha_sweep() {
             "Cl should increase monotonically with AoA"
         );
     }
+}
+
+// --- VLM integration tests ---
+
+#[test]
+fn vlm_to_forces_pipeline() {
+    let wing = vlm::WingGeometry::rectangular(6.0, 1.0, 10, 2);
+    let panels = vlm::generate_panels(&wing);
+    let sol = vlm::solve(&panels, &wing, 5.0_f64.to_radians(), 60.0).expect("vlm solve");
+
+    // Feed VLM Cl/CDi into forces module
+    let rho = atmosphere::standard_density(0.0);
+    let q = atmosphere::dynamic_pressure(rho, 60.0);
+    let s = wing.reference_area();
+    let l = forces::lift(q, s, sol.cl);
+    let d = forces::drag(q, s, sol.cdi);
+    assert!(
+        l > 0.0,
+        "VLM should produce positive lift, got CL={}",
+        sol.cl
+    );
+    assert!(
+        d > 0.0,
+        "VLM should produce positive induced drag, got CDi={}",
+        sol.cdi
+    );
+    assert!(l > d, "lift should exceed induced drag");
+}
+
+#[test]
+fn vlm_cdi_matches_formula() {
+    // CDi from VLM should roughly match CDi = CL²/(π·e·AR) with VLM's own e
+    let wing = vlm::WingGeometry::rectangular(8.0, 1.0, 12, 2);
+    let panels = vlm::generate_panels(&wing);
+    let sol = vlm::solve(&panels, &wing, 5.0_f64.to_radians(), 1.0).expect("solve");
+
+    let ar = wing.aspect_ratio();
+    let cdi_formula = sol.cl * sol.cl / (std::f64::consts::PI * sol.oswald_efficiency * ar);
+    let rel_err = (sol.cdi - cdi_formula).abs() / sol.cdi.max(1e-10);
+    assert!(
+        rel_err < 0.05,
+        "CDi from VLM ({}) should match formula ({}) within 5%",
+        sol.cdi,
+        cdi_formula
+    );
+}
+
+#[test]
+fn vlm_serde_round_trip_wing() {
+    let wing = vlm::WingGeometry::tapered(10.0, 2.0, 1.0, 8, 2);
+    let json = serde_json::to_string(&wing).expect("serialize");
+    let back: WingGeometry = serde_json::from_str(&json).expect("deserialize");
+    assert!((back.span - wing.span).abs() < f64::EPSILON);
+    assert!((back.tip_chord - wing.tip_chord).abs() < f64::EPSILON);
 }
 
 // --- CFD integration tests (feature-gated) ---

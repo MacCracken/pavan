@@ -294,7 +294,91 @@ criterion_group!(
     bench_panel_solve_200,
     bench_panel_solve_multi,
     bench_panel_cambered,
+    // vlm
+    bench_vlm_rect_10x2,
+    bench_vlm_rect_20x2,
+    bench_vlm_rect_40x2,
+    bench_vlm_tapered_20x2,
+    bench_vlm_solve_multi,
 );
+
+// --- VLM benchmarks ---
+
+fn bench_vlm_rect_10x2(c: &mut Criterion) {
+    let wing = pavan::vlm::WingGeometry::rectangular(6.0, 1.0, 5, 2);
+    let panels = pavan::vlm::generate_panels(&wing);
+    c.bench_function("vlm/rect_10x2_solve", |b| {
+        b.iter(|| {
+            pavan::vlm::solve(
+                black_box(&panels),
+                black_box(&wing),
+                black_box(0.087),
+                black_box(1.0),
+            )
+        });
+    });
+}
+
+fn bench_vlm_rect_20x2(c: &mut Criterion) {
+    let wing = pavan::vlm::WingGeometry::rectangular(6.0, 1.0, 10, 2);
+    let panels = pavan::vlm::generate_panels(&wing);
+    c.bench_function("vlm/rect_20x2_solve", |b| {
+        b.iter(|| {
+            pavan::vlm::solve(
+                black_box(&panels),
+                black_box(&wing),
+                black_box(0.087),
+                black_box(1.0),
+            )
+        });
+    });
+}
+
+fn bench_vlm_rect_40x2(c: &mut Criterion) {
+    let wing = pavan::vlm::WingGeometry::rectangular(6.0, 1.0, 20, 2);
+    let panels = pavan::vlm::generate_panels(&wing);
+    c.bench_function("vlm/rect_40x2_solve", |b| {
+        b.iter(|| {
+            pavan::vlm::solve(
+                black_box(&panels),
+                black_box(&wing),
+                black_box(0.087),
+                black_box(1.0),
+            )
+        });
+    });
+}
+
+fn bench_vlm_tapered_20x2(c: &mut Criterion) {
+    let wing = pavan::vlm::WingGeometry::tapered(6.0, 1.5, 0.5, 10, 2);
+    let panels = pavan::vlm::generate_panels(&wing);
+    c.bench_function("vlm/tapered_20x2_solve", |b| {
+        b.iter(|| {
+            pavan::vlm::solve(
+                black_box(&panels),
+                black_box(&wing),
+                black_box(0.087),
+                black_box(1.0),
+            )
+        });
+    });
+}
+
+fn bench_vlm_solve_multi(c: &mut Criterion) {
+    let wing = pavan::vlm::WingGeometry::rectangular(6.0, 1.0, 10, 2);
+    let panels = pavan::vlm::generate_panels(&wing);
+    let alphas = [0.0, 0.035, 0.052, 0.087, 0.140];
+    c.bench_function("vlm/solve_multi_5_alphas_20x2", |b| {
+        b.iter(|| {
+            pavan::vlm::solve_multi(
+                black_box(&panels),
+                black_box(&wing),
+                black_box(&alphas),
+                black_box(1.0),
+            )
+        });
+    });
+}
 
 // --- CFD benchmarks (feature-gated) ---
 

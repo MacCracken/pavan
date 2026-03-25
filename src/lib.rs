@@ -14,6 +14,7 @@ pub mod error;
 pub mod forces;
 pub mod panel;
 pub mod vehicle;
+pub mod vlm;
 pub mod wind;
 
 #[cfg(feature = "cfd")]
@@ -33,6 +34,7 @@ pub use forces::{AeroForce, drag, lift, reynolds_number};
 pub use airfoil::{NacaProfile, SurfacePoints};
 pub use panel::{Panel, PanelSolution};
 pub use vehicle::AeroBody;
+pub use vlm::{VlmSolution, WingGeometry};
 pub use wind::WindField;
 
 #[cfg(feature = "cfd")]
