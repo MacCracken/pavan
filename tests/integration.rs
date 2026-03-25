@@ -1,6 +1,7 @@
 use pavan::airfoil::NacaProfile;
 use pavan::boundary;
 use pavan::forces::{self, AeroForce};
+use pavan::panel;
 use pavan::vehicle::AeroBody;
 use pavan::wind::WindField;
 use pavan::*;
@@ -182,5 +183,75 @@ fn glider_vs_aircraft_full_envelope() {
         let ld_g = fg.lift / fg.drag;
         let ld_a = fa.lift / fa.drag;
         assert!(ld_g > ld_a, "glider should have better L/D at {deg}° AoA");
+    }
+}
+
+// --- Panel method integration tests ---
+
+#[test]
+fn panel_method_airfoil_to_forces_pipeline() {
+    let profile = NacaProfile::naca0012();
+    let (upper, lower) = profile.surface_coordinates(80);
+    let panels = panel::panels_from_surface(&upper, &lower);
+
+    let alpha = 5.0_f64.to_radians();
+    let sol = panel::solve(&panels, alpha).expect("panel solve");
+
+    let rho = atmosphere::standard_density(0.0);
+    let f = forces::compute_aero_force(rho, 60.0, 16.2, sol.cl, sol.cd, sol.cm, 1.5);
+    assert!(
+        f.lift > 0.0,
+        "panel method should produce positive lift at 5°"
+    );
+    assert!(f.drag >= 0.0);
+}
+
+#[test]
+fn panel_method_vs_thin_airfoil_comparison() {
+    let profile = NacaProfile::naca0012();
+    let (upper, lower) = profile.surface_coordinates(100);
+    let panels = panel::panels_from_surface(&upper, &lower);
+
+    let alpha = 3.0_f64.to_radians();
+    let sol = panel::solve(&panels, alpha).expect("solve");
+    let cl_thin = lift_coefficient_thin_airfoil(alpha);
+
+    let rel_diff = (sol.cl - cl_thin).abs() / cl_thin;
+    assert!(
+        rel_diff < 0.3,
+        "panel Cl={:.3} vs thin Cl={:.3}, diff={:.0}%",
+        sol.cl,
+        cl_thin,
+        rel_diff * 100.0
+    );
+}
+
+#[test]
+fn panel_method_serde_round_trip() {
+    let profile = NacaProfile::naca0012();
+    let (upper, lower) = profile.surface_coordinates(50);
+    let panels = panel::panels_from_surface(&upper, &lower);
+    let sol = panel::solve(&panels, 0.0).expect("solve");
+
+    let json = serde_json::to_string(&sol).expect("serialize");
+    let back: PanelSolution = serde_json::from_str(&json).expect("deserialize");
+    assert!((back.cl - sol.cl).abs() < f64::EPSILON);
+    assert_eq!(back.cp.len(), sol.cp.len());
+}
+
+#[test]
+fn panel_method_alpha_sweep() {
+    let profile = NacaProfile::naca0012();
+    let (upper, lower) = profile.surface_coordinates(80);
+    let panels = panel::panels_from_surface(&upper, &lower);
+
+    let alphas: Vec<f64> = (-5..=10).map(|d| (d as f64).to_radians()).collect();
+    let results = panel::solve_multi(&panels, &alphas).expect("solve_multi");
+
+    for i in 1..results.len() {
+        assert!(
+            results[i].cl > results[i - 1].cl,
+            "Cl should increase monotonically with AoA"
+        );
     }
 }

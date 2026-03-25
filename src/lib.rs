@@ -12,6 +12,7 @@ pub mod boundary;
 pub mod coefficients;
 pub mod error;
 pub mod forces;
+pub mod panel;
 pub mod vehicle;
 pub mod wind;
 
@@ -27,5 +28,6 @@ pub use error::{PavanError, Result};
 pub use forces::{AeroForce, drag, lift, reynolds_number};
 
 pub use airfoil::{NacaProfile, SurfacePoints};
+pub use panel::{Panel, PanelSolution};
 pub use vehicle::AeroBody;
 pub use wind::WindField;

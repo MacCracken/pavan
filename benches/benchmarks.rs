@@ -1,4 +1,5 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
+use std::hint::black_box;
 
 // --- Atmosphere ---
 
@@ -206,6 +207,54 @@ fn bench_vehicle_forces(c: &mut Criterion) {
     });
 }
 
+// --- Panel ---
+
+fn bench_panel_solve_50(c: &mut Criterion) {
+    let profile = pavan::airfoil::NacaProfile::naca0012();
+    let (upper, lower) = profile.surface_coordinates(30);
+    let panels = pavan::panel::panels_from_surface(&upper, &lower);
+    c.bench_function("panel/naca0012_solve_50panels", |b| {
+        b.iter(|| pavan::panel::solve(black_box(&panels), black_box(0.087)));
+    });
+}
+
+fn bench_panel_solve_100(c: &mut Criterion) {
+    let profile = pavan::airfoil::NacaProfile::naca0012();
+    let (upper, lower) = profile.surface_coordinates(60);
+    let panels = pavan::panel::panels_from_surface(&upper, &lower);
+    c.bench_function("panel/naca0012_solve_100panels", |b| {
+        b.iter(|| pavan::panel::solve(black_box(&panels), black_box(0.087)));
+    });
+}
+
+fn bench_panel_solve_200(c: &mut Criterion) {
+    let profile = pavan::airfoil::NacaProfile::naca0012();
+    let (upper, lower) = profile.surface_coordinates(120);
+    let panels = pavan::panel::panels_from_surface(&upper, &lower);
+    c.bench_function("panel/naca0012_solve_200panels", |b| {
+        b.iter(|| pavan::panel::solve(black_box(&panels), black_box(0.087)));
+    });
+}
+
+fn bench_panel_solve_multi(c: &mut Criterion) {
+    let profile = pavan::airfoil::NacaProfile::naca0012();
+    let (upper, lower) = profile.surface_coordinates(60);
+    let panels = pavan::panel::panels_from_surface(&upper, &lower);
+    let alphas = [0.0, 0.035, 0.052, 0.087, 0.140];
+    c.bench_function("panel/solve_multi_5_alphas_100p", |b| {
+        b.iter(|| pavan::panel::solve_multi(black_box(&panels), black_box(&alphas)));
+    });
+}
+
+fn bench_panel_cambered(c: &mut Criterion) {
+    let profile = pavan::airfoil::NacaProfile::naca2412();
+    let (upper, lower) = profile.surface_coordinates(60);
+    let panels = pavan::panel::panels_from_surface(&upper, &lower);
+    c.bench_function("panel/naca2412_solve_100panels", |b| {
+        b.iter(|| pavan::panel::solve(black_box(&panels), black_box(0.087)));
+    });
+}
+
 criterion_group!(
     benches,
     // atmosphere
@@ -239,5 +288,11 @@ criterion_group!(
     bench_wind_chill,
     // vehicle
     bench_vehicle_forces,
+    // panel
+    bench_panel_solve_50,
+    bench_panel_solve_100,
+    bench_panel_solve_200,
+    bench_panel_solve_multi,
+    bench_panel_cambered,
 );
 criterion_main!(benches);
