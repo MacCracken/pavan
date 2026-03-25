@@ -1,6 +1,8 @@
 use pavan::*;
 use pavan::airfoil::NacaProfile;
 use pavan::vehicle::AeroBody;
+use pavan::forces::{self, AeroForce};
+use pavan::wind::WindField;
 use pavan::boundary;
 
 #[test]
@@ -38,4 +40,127 @@ fn boundary_layer_transition() {
     let re_turb = 1_000_000.0;
     assert!(!boundary::is_turbulent(re_lam));
     assert!(boundary::is_turbulent(re_turb));
+}
+
+// --- Cross-module pipeline tests ---
+
+#[test]
+fn atmosphere_to_forces_pipeline() {
+    // Full pipeline: altitude → density/temp → viscosity → Reynolds → forces
+    let alt = 3000.0;
+    let velocity = 70.0;
+    let chord = 1.5;
+
+    let rho = atmosphere::standard_density(alt);
+    let t = atmosphere::standard_temperature(alt);
+    let mu = forces::air_dynamic_viscosity(t);
+    let re = forces::reynolds_number(rho, velocity, chord, mu);
+    let q = atmosphere::dynamic_pressure(rho, velocity);
+
+    assert!(rho > 0.0 && rho < 1.225);
+    assert!(re > 1e6, "Re should be > 1M for aircraft conditions, got {re}");
+    assert!(q > 0.0);
+
+    let cl = lift_coefficient_thin_airfoil(5.0_f64.to_radians());
+    let cd = drag_coefficient(0.027, cl, 7.5, 0.8);
+    let l = forces::lift(q, 16.2, cl);
+    let d = forces::drag(q, 16.2, cd);
+    assert!(l > d, "lift should exceed drag at 5° AoA");
+}
+
+#[test]
+fn atmosphere_consistency_at_multiple_altitudes() {
+    // Ideal gas law P = ρRT must hold at all altitudes
+    for h in [0.0, 2000.0, 5000.0, 8000.0, 11_000.0, 15_000.0, 20_000.0] {
+        let t = atmosphere::standard_temperature(h);
+        let p = atmosphere::standard_pressure(h);
+        let rho = atmosphere::standard_density(h);
+        let p_check = rho * atmosphere::GAS_CONSTANT_AIR * t;
+        let rel_err = (p - p_check).abs() / p;
+        assert!(rel_err < 1e-6, "ideal gas law violated at {h}m: P={p}, ρRT={p_check}");
+    }
+}
+
+#[test]
+fn boundary_layer_with_real_reynolds() {
+    // Use forces module to compute real Reynolds, then check boundary layer
+    let rho = atmosphere::standard_density(0.0);
+    let t = atmosphere::standard_temperature(0.0);
+    let mu = forces::air_dynamic_viscosity(t);
+    let velocity = 50.0;
+    let x = 1.0;
+
+    let re = forces::reynolds_number(rho, velocity, x, mu);
+    assert!(boundary::is_turbulent(re), "Re at sea level/50m/s should be turbulent");
+
+    let delta_lam = boundary::blasius_thickness(x, re);
+    let delta_turb = boundary::turbulent_thickness(x, re);
+    assert!(delta_turb > delta_lam);
+    assert!(delta_turb < 0.05, "BL thickness should be reasonable at 1m");
+}
+
+#[test]
+fn serde_round_trip_aero_force() {
+    let f = forces::compute_aero_force(1.225, 100.0, 10.0, 0.5, 0.05, -0.1, 1.5);
+    let json = serde_json::to_string(&f).expect("serialize AeroForce");
+    let back: AeroForce = serde_json::from_str(&json).expect("deserialize AeroForce");
+    assert!((back.lift - f.lift).abs() < f64::EPSILON);
+    assert!((back.drag - f.drag).abs() < f64::EPSILON);
+    assert!((back.moment - f.moment).abs() < f64::EPSILON);
+}
+
+#[test]
+fn serde_round_trip_wind_field() {
+    let w = WindField::from_speed_direction(15.0, 0.5);
+    let json = serde_json::to_string(&w).expect("serialize WindField");
+    let back: WindField = serde_json::from_str(&json).expect("deserialize WindField");
+    for i in 0..3 {
+        assert!((back.velocity[i] - w.velocity[i]).abs() < f64::EPSILON);
+    }
+}
+
+#[test]
+fn serde_round_trip_aero_body() {
+    let body = AeroBody::light_aircraft();
+    let json = serde_json::to_string(&body).expect("serialize AeroBody");
+    let back: AeroBody = serde_json::from_str(&json).expect("deserialize AeroBody");
+    assert!((back.reference_area - body.reference_area).abs() < f64::EPSILON);
+    assert!((back.cd0 - body.cd0).abs() < f64::EPSILON);
+    assert!((back.aspect_ratio - body.aspect_ratio).abs() < f64::EPSILON);
+}
+
+#[test]
+fn wind_profile_altitude_interaction() {
+    // Higher altitude → lower density, but wind profile is independent of density
+    let v_ref = 10.0;
+    let z_ref = 10.0;
+    let z0 = 0.03;
+
+    let v_100m = pavan::wind::log_wind_profile(v_ref, 100.0, z_ref, z0);
+    let v_200m = pavan::wind::log_wind_profile(v_ref, 200.0, z_ref, z0);
+    assert!(v_200m > v_100m, "wind should increase with height");
+
+    // Dynamic pressure with wind at different altitudes
+    let rho_low = atmosphere::standard_density(100.0);
+    let rho_high = atmosphere::standard_density(5000.0);
+    let q_low = atmosphere::dynamic_pressure(rho_low, v_100m);
+    let q_high = atmosphere::dynamic_pressure(rho_high, v_200m);
+    // Despite higher wind at altitude, lower density may reduce dynamic pressure
+    assert!(q_low > 0.0 && q_high > 0.0);
+}
+
+#[test]
+fn glider_vs_aircraft_full_envelope() {
+    let glider = AeroBody::glider();
+    let aircraft = AeroBody::light_aircraft();
+
+    // Glider should have better L/D across a range of AoA
+    for deg in [2.0_f64, 3.0, 5.0, 7.0] {
+        let alpha = deg.to_radians();
+        let fg = glider.compute_forces(30.0, 0.0, alpha);
+        let fa = aircraft.compute_forces(30.0, 0.0, alpha);
+        let ld_g = fg.lift / fg.drag;
+        let ld_a = fa.lift / fa.drag;
+        assert!(ld_g > ld_a, "glider should have better L/D at {deg}° AoA");
+    }
 }

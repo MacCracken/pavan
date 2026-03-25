@@ -106,4 +106,63 @@ mod tests {
         let ld_max = max_lift_to_drag_ratio(0.01, 20.0, 0.85);
         assert!(ld_max > 30.0 && ld_max < 40.0, "glider L/D max should be ~36, got {ld_max}");
     }
+
+    // --- Edge cases ---
+
+    #[test]
+    fn drag_coefficient_zero_aspect_ratio() {
+        let cd = drag_coefficient(0.02, 0.5, 0.0, 0.8);
+        assert!((cd - 0.02).abs() < f64::EPSILON, "zero AR should return just Cd0");
+    }
+
+    #[test]
+    fn drag_coefficient_zero_oswald() {
+        let cd = drag_coefficient(0.02, 0.5, 8.0, 0.0);
+        assert!((cd - 0.02).abs() < f64::EPSILON, "zero Oswald should return just Cd0");
+    }
+
+    #[test]
+    fn drag_coefficient_negative_ar() {
+        let cd = drag_coefficient(0.02, 0.5, -5.0, 0.8);
+        assert!((cd - 0.02).abs() < f64::EPSILON, "negative AR should return just Cd0");
+    }
+
+    #[test]
+    fn lift_to_drag_ratio_zero_drag() {
+        let ld = lift_to_drag_ratio(1.0, 0.0);
+        assert_eq!(ld, 0.0, "zero drag should return 0 (guard)");
+    }
+
+    #[test]
+    fn max_ld_ratio_zero_cd0() {
+        let ld = max_lift_to_drag_ratio(0.0, 8.0, 0.8);
+        assert_eq!(ld, 0.0, "zero Cd0 should return 0 (guard)");
+    }
+
+    #[test]
+    fn cl_at_max_ld_typical() {
+        // Cd0=0.02, AR=8, e=0.8 → Cl_opt = √(π×0.8×8×0.02) ≈ 0.634
+        let cl = cl_at_max_ld(0.02, 8.0, 0.8);
+        assert!((cl - 0.634).abs() < 0.01, "Cl at max L/D should be ~0.634, got {cl}");
+    }
+
+    #[test]
+    fn cl_at_max_ld_verifies_max_ld() {
+        let cd0 = 0.02;
+        let ar = 8.0;
+        let e = 0.8;
+        let cl_opt = cl_at_max_ld(cd0, ar, e);
+        let cd_opt = drag_coefficient(cd0, cl_opt, ar, e);
+        let ld = lift_to_drag_ratio(cl_opt, cd_opt);
+        let ld_max = max_lift_to_drag_ratio(cd0, ar, e);
+        assert!((ld - ld_max).abs() < 0.01, "L/D at Cl_opt should equal max L/D: {ld} vs {ld_max}");
+    }
+
+    #[test]
+    fn thin_airfoil_negative_aoa() {
+        let alpha = (-5.0_f64).to_radians();
+        let cl = lift_coefficient_thin_airfoil(alpha);
+        assert!(cl < 0.0, "negative AoA should produce negative Cl");
+        assert!((cl + 0.548).abs() < 0.01, "magnitude should match positive 5°");
+    }
 }

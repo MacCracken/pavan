@@ -124,4 +124,56 @@ mod tests {
         assert!(f.drag > 0.0);
         assert!(f.moment < 0.0); // negative Cm → nose-down moment
     }
+
+    // --- Edge cases ---
+
+    #[test]
+    fn reynolds_zero_viscosity_guard() {
+        assert_eq!(reynolds_number(1.225, 50.0, 1.0, 0.0), 0.0);
+        assert_eq!(reynolds_number(1.225, 50.0, 1.0, -1.0), 0.0);
+    }
+
+    #[test]
+    fn viscosity_zero_temp_guard() {
+        let mu = air_dynamic_viscosity(0.0);
+        // Guard returns mu_ref = 1.716e-5
+        assert!((mu - 1.716e-5).abs() < 1e-8);
+    }
+
+    #[test]
+    fn viscosity_negative_temp_guard() {
+        let mu = air_dynamic_viscosity(-100.0);
+        assert!((mu - 1.716e-5).abs() < 1e-8);
+    }
+
+    #[test]
+    fn compute_aero_force_moment_value() {
+        // q = 0.5 * 1.225 * 100² = 6125
+        // moment = q * S * chord * Cm = 6125 * 10 * 1.5 * (-0.1) = -9187.5
+        let f = compute_aero_force(1.225, 100.0, 10.0, 0.5, 0.05, -0.1, 1.5);
+        assert!((f.moment - (-9187.5)).abs() < 1.0, "moment should be ~-9187.5, got {}", f.moment);
+    }
+
+    #[test]
+    fn compute_aero_force_zero_velocity() {
+        let f = compute_aero_force(1.225, 0.0, 10.0, 0.5, 0.05, -0.1, 1.5);
+        assert_eq!(f.lift, 0.0);
+        assert_eq!(f.drag, 0.0);
+        assert_eq!(f.moment, 0.0);
+    }
+
+    #[test]
+    fn lift_scales_linearly_with_area() {
+        let l1 = lift(6125.0, 10.0, 0.5);
+        let l2 = lift(6125.0, 20.0, 0.5);
+        assert!((l2 / l1 - 2.0).abs() < 1e-10, "lift should scale linearly with area");
+    }
+
+    #[test]
+    fn viscosity_at_high_altitude_temp() {
+        // At tropopause T=216.65K, μ should be lower than sea level
+        let mu_sl = air_dynamic_viscosity(288.15);
+        let mu_tropo = air_dynamic_viscosity(216.65);
+        assert!(mu_tropo < mu_sl, "viscosity should be lower at lower temperature");
+    }
 }

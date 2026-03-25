@@ -100,4 +100,47 @@ mod tests {
         let f_high = body.compute_forces(60.0, 5000.0, alpha);
         assert!(f_high.lift < f_low.lift, "lift should decrease with altitude (lower density)");
     }
+
+    // --- Edge cases ---
+
+    #[test]
+    fn moment_is_zero_simplified() {
+        let body = AeroBody::light_aircraft();
+        let f = body.compute_forces(60.0, 0.0, 5.0_f64.to_radians());
+        assert_eq!(f.moment, 0.0, "vehicle compute_forces should produce zero moment (simplified)");
+    }
+
+    #[test]
+    fn zero_velocity_zero_forces() {
+        let body = AeroBody::light_aircraft();
+        let f = body.compute_forces(0.0, 0.0, 5.0_f64.to_radians());
+        assert_eq!(f.lift, 0.0);
+        assert_eq!(f.drag, 0.0);
+    }
+
+    #[test]
+    fn glider_preset_values() {
+        let g = AeroBody::glider();
+        assert!((g.reference_area - 9.5).abs() < f64::EPSILON);
+        assert!((g.cd0 - 0.01).abs() < f64::EPSILON);
+        assert!((g.aspect_ratio - 23.0).abs() < f64::EPSILON);
+        assert!((g.oswald_efficiency - 0.9).abs() < f64::EPSILON);
+        assert!((g.chord - 0.8).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn light_aircraft_preset_values() {
+        let a = AeroBody::light_aircraft();
+        assert!((a.reference_area - 16.2).abs() < f64::EPSILON);
+        assert!((a.cd0 - 0.027).abs() < f64::EPSILON);
+        assert!((a.aspect_ratio - 7.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn drag_always_positive_at_nonzero_velocity() {
+        let body = AeroBody::light_aircraft();
+        // Even at zero AoA, parasitic drag exists
+        let f = body.compute_forces(60.0, 0.0, 0.0);
+        assert!(f.drag > 0.0, "parasitic drag should exist even at zero AoA");
+    }
 }

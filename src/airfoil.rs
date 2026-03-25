@@ -101,6 +101,7 @@ impl NacaProfile {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json;
 
     #[test]
     fn naca0012_is_symmetric() {
@@ -154,5 +155,56 @@ mod tests {
         let idx = 30; // 30% chord
         let thickness = upper[idx].1 - lower[idx].1;
         assert!(thickness > 0.0 && thickness < 0.15, "thickness at 30% should be reasonable, got {thickness}");
+    }
+
+    // --- Edge cases ---
+
+    #[test]
+    fn naca4415_properties() {
+        let p = NacaProfile::naca4415();
+        assert!((p.max_camber - 0.04).abs() < f64::EPSILON);
+        assert!((p.camber_position - 0.4).abs() < f64::EPSILON);
+        assert!((p.max_thickness - 0.15).abs() < f64::EPSILON);
+        assert!(!p.is_symmetric());
+    }
+
+    #[test]
+    fn surface_coordinates_two_points() {
+        // Minimum useful: 2 points (leading + trailing edge)
+        let profile = NacaProfile::naca0012();
+        let (upper, lower) = profile.surface_coordinates(2);
+        assert_eq!(upper.len(), 2);
+        assert_eq!(lower.len(), 2);
+    }
+
+    #[test]
+    fn cambered_upper_above_lower() {
+        let profile = NacaProfile::naca2412();
+        let (upper, lower) = profile.surface_coordinates(50);
+        // Mid-chord points: upper should generally be above lower
+        for i in 1..49 {
+            assert!(upper[i].1 > lower[i].1, "upper surface should be above lower at point {i}");
+        }
+    }
+
+    #[test]
+    fn naca4415_thicker_than_0012() {
+        let thin = NacaProfile::naca0012();
+        let thick = NacaProfile::naca4415();
+        let (u_thin, l_thin) = thin.surface_coordinates(100);
+        let (u_thick, l_thick) = thick.surface_coordinates(100);
+        let max_t_thin: f64 = u_thin.iter().zip(l_thin.iter()).map(|(u, l)| u.1 - l.1).fold(0.0_f64, f64::max);
+        let max_t_thick: f64 = u_thick.iter().zip(l_thick.iter()).map(|(u, l)| u.1 - l.1).fold(0.0_f64, f64::max);
+        assert!(max_t_thick > max_t_thin, "NACA 4415 should be thicker than NACA 0012");
+    }
+
+    #[test]
+    fn serde_round_trip() {
+        let profile = NacaProfile::naca2412();
+        let json = serde_json::to_string(&profile).expect("serialize");
+        let back: NacaProfile = serde_json::from_str(&json).expect("deserialize");
+        assert!((back.max_camber - profile.max_camber).abs() < f64::EPSILON);
+        assert!((back.camber_position - profile.camber_position).abs() < f64::EPSILON);
+        assert!((back.max_thickness - profile.max_thickness).abs() < f64::EPSILON);
     }
 }

@@ -1,5 +1,3 @@
-use std::f64::consts::PI;
-
 /// Sea level temperature (K) — ISA standard.
 pub const SEA_LEVEL_TEMPERATURE: f64 = 288.15;
 /// Sea level pressure (Pa) — ISA standard.
@@ -168,5 +166,85 @@ mod tests {
         let p = standard_pressure(h);
         let h_back = pressure_altitude(p);
         assert!((h_back - h).abs() < 10.0, "pressure altitude roundtrip should be close, got {h_back}");
+    }
+
+    // --- Edge cases ---
+
+    #[test]
+    fn density_at_tropopause() {
+        let rho = standard_density(11_000.0);
+        // ISA standard: ~0.3639 kg/m³ at 11km
+        assert!(rho > 0.3 && rho < 0.4, "tropopause density should be ~0.36, got {rho}");
+    }
+
+    #[test]
+    fn pressure_above_tropopause() {
+        let p11 = standard_pressure(11_000.0);
+        let p15 = standard_pressure(15_000.0);
+        let p20 = standard_pressure(20_000.0);
+        assert!(p15 < p11, "pressure should decrease above tropopause");
+        assert!(p20 < p15);
+    }
+
+    #[test]
+    fn density_above_tropopause() {
+        let rho11 = standard_density(11_000.0);
+        let rho15 = standard_density(15_000.0);
+        assert!(rho15 < rho11, "density should decrease above tropopause");
+        assert!(rho15 > 0.0, "density should remain positive");
+    }
+
+    #[test]
+    fn speed_of_sound_at_tropopause() {
+        let a = speed_of_sound(216.65);
+        // ~295 m/s at tropopause
+        assert!((a - 295.0).abs() < 2.0, "speed of sound at tropopause should be ~295 m/s, got {a}");
+    }
+
+    #[test]
+    fn speed_of_sound_zero_temp_guard() {
+        assert_eq!(speed_of_sound(0.0), 0.0);
+        assert_eq!(speed_of_sound(-10.0), 0.0);
+    }
+
+    #[test]
+    fn mach_number_zero_temp_guard() {
+        assert_eq!(mach_number(100.0, 0.0), 0.0);
+    }
+
+    #[test]
+    fn pressure_altitude_zero_pressure_guard() {
+        assert_eq!(pressure_altitude(0.0), 0.0);
+        assert_eq!(pressure_altitude(-1.0), 0.0);
+    }
+
+    #[test]
+    fn dynamic_pressure_zero_density() {
+        assert_eq!(dynamic_pressure(0.0, 100.0), 0.0);
+    }
+
+    #[test]
+    fn density_negative_temp_guard() {
+        // If temperature drops to zero (impossible physically but test the guard)
+        let rho = standard_density(1_000_000.0); // extreme altitude
+        assert!(rho >= 0.0, "density must never be negative");
+    }
+
+    #[test]
+    fn ideal_gas_law_at_multiple_altitudes() {
+        for h in [0.0, 1000.0, 5000.0, 10_000.0, 11_000.0] {
+            let t = standard_temperature(h);
+            let p = standard_pressure(h);
+            let rho = standard_density(h);
+            let p_check = rho * GAS_CONSTANT_AIR * t;
+            assert!((p - p_check).abs() / p < 1e-6, "ideal gas law violated at {h}m");
+        }
+    }
+
+    #[test]
+    fn mach_supersonic() {
+        let t = standard_temperature(0.0);
+        let m = mach_number(500.0, t);
+        assert!(m > 1.0, "500 m/s at sea level should be supersonic, got M={m}");
     }
 }

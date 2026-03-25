@@ -108,4 +108,63 @@ mod tests {
         let wc = wind_chill(15.0, 30.0);
         assert!((wc - 15.0).abs() < 0.01, "no wind chill above 10°C");
     }
+
+    // --- Edge cases ---
+
+    #[test]
+    fn log_profile_zero_roughness_guard() {
+        let v = log_wind_profile(10.0, 50.0, 10.0, 0.0);
+        assert_eq!(v, 0.0, "zero roughness should return 0");
+    }
+
+    #[test]
+    fn log_profile_height_below_roughness_guard() {
+        let v = log_wind_profile(10.0, 0.01, 10.0, 0.03);
+        assert_eq!(v, 0.0, "height below roughness should return 0");
+    }
+
+    #[test]
+    fn power_law_zero_height_guard() {
+        let v = power_law_wind_profile(10.0, 0.0, 10.0, 0.14);
+        assert_eq!(v, 0.0, "zero height should return 0");
+    }
+
+    #[test]
+    fn power_law_negative_height_guard() {
+        let v = power_law_wind_profile(10.0, -5.0, 10.0, 0.14);
+        assert_eq!(v, 0.0, "negative height should return 0");
+    }
+
+    #[test]
+    fn power_law_increases_with_height() {
+        let v10 = power_law_wind_profile(10.0, 10.0, 10.0, 0.14);
+        let v50 = power_law_wind_profile(10.0, 50.0, 10.0, 0.14);
+        assert!(v50 > v10, "wind should increase with height");
+    }
+
+    #[test]
+    fn wind_chill_low_wind_no_effect() {
+        let wc = wind_chill(-10.0, 3.0);
+        assert!((wc - (-10.0)).abs() < 0.01, "wind below 4.8 km/h should have no chill effect");
+    }
+
+    #[test]
+    fn wind_chill_known_value() {
+        // NWS: -10°C at 30 km/h → approximately -20°C
+        let wc = wind_chill(-10.0, 30.0);
+        assert!(wc > -25.0 && wc < -15.0, "wind chill at -10°C/30kmh should be ~-20°C, got {wc}");
+    }
+
+    #[test]
+    fn wind_field_3d_speed() {
+        let w = WindField { velocity: [1.0, 2.0, 2.0] };
+        assert!((w.speed() - 3.0).abs() < 0.001, "3D magnitude of (1,2,2) should be 3");
+    }
+
+    #[test]
+    fn wind_from_speed_direction_90_degrees() {
+        let w = WindField::from_speed_direction(10.0, std::f64::consts::FRAC_PI_2);
+        assert!(w.velocity[0].abs() < 0.001, "x should be ~0 at 90°");
+        assert!((w.velocity[1] - 10.0).abs() < 0.001, "y should be ~10 at 90°");
+    }
 }

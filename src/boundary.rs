@@ -94,4 +94,49 @@ mod tests {
         assert_eq!(turbulent_thickness(1.0, 0.0), 0.0);
         assert_eq!(skin_friction_laminar(0.0), 0.0);
     }
+
+    // --- Edge cases ---
+
+    #[test]
+    fn negative_reynolds_safe() {
+        assert_eq!(blasius_thickness(1.0, -1.0), 0.0);
+        assert_eq!(turbulent_thickness(1.0, -1.0), 0.0);
+        assert_eq!(skin_friction_laminar(-1.0), 0.0);
+        assert_eq!(skin_friction_turbulent(-1.0), 0.0);
+    }
+
+    #[test]
+    fn skin_friction_turbulent_zero_reynolds() {
+        assert_eq!(skin_friction_turbulent(0.0), 0.0);
+    }
+
+    #[test]
+    fn blasius_thickness_scales_with_x() {
+        let re = 500_000.0;
+        let d1 = blasius_thickness(1.0, re);
+        let d2 = blasius_thickness(2.0, re);
+        assert!((d2 / d1 - 2.0).abs() < 1e-10, "Blasius thickness should scale linearly with x");
+    }
+
+    #[test]
+    fn turbulent_thickness_at_transition() {
+        // At Re = 500k, compare laminar and turbulent
+        let re = TRANSITION_REYNOLDS;
+        let lam = blasius_thickness(1.0, re);
+        let turb = turbulent_thickness(1.0, re);
+        assert!(turb > lam, "turbulent should be thicker even at transition point");
+    }
+
+    #[test]
+    fn skin_friction_known_values() {
+        // Blasius Cf at Re=1e6: 0.664/1000 = 6.64e-4
+        let cf = skin_friction_laminar(1_000_000.0);
+        assert!((cf - 6.64e-4).abs() < 1e-5, "Cf_lam at Re=1M should be ~6.64e-4, got {cf}");
+    }
+
+    #[test]
+    fn is_turbulent_at_boundary() {
+        assert!(!is_turbulent(TRANSITION_REYNOLDS), "exactly at transition should be laminar");
+        assert!(is_turbulent(TRANSITION_REYNOLDS + 1.0));
+    }
 }
