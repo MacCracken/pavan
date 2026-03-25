@@ -27,7 +27,9 @@ pub fn drag_coefficient(cd0: f64, cl: f64, aspect_ratio: f64, oswald_efficiency:
 #[must_use]
 #[inline]
 pub fn lift_to_drag_ratio(cl: f64, cd: f64) -> f64 {
-    if cd.abs() < f64::EPSILON { return 0.0; }
+    if cd.abs() < f64::EPSILON {
+        return 0.0;
+    }
     cl / cd
 }
 
@@ -37,7 +39,9 @@ pub fn lift_to_drag_ratio(cl: f64, cd: f64) -> f64 {
 #[must_use]
 #[inline]
 pub fn max_lift_to_drag_ratio(cd0: f64, aspect_ratio: f64, oswald_efficiency: f64) -> f64 {
-    if cd0 <= 0.0 { return 0.0; }
+    if cd0 <= 0.0 {
+        return 0.0;
+    }
     0.5 * (PI * oswald_efficiency * aspect_ratio / cd0).sqrt()
 }
 
@@ -58,7 +62,10 @@ mod tests {
     fn thin_airfoil_at_5_degrees() {
         let alpha = 5.0_f64.to_radians();
         let cl = lift_coefficient_thin_airfoil(alpha);
-        assert!((cl - 0.548).abs() < 0.01, "Cl at 5° should be ~0.548, got {cl}");
+        assert!(
+            (cl - 0.548).abs() < 0.01,
+            "Cl at 5° should be ~0.548, got {cl}"
+        );
     }
 
     #[test]
@@ -71,7 +78,10 @@ mod tests {
     fn thin_airfoil_at_10_degrees() {
         let alpha = 10.0_f64.to_radians();
         let cl = lift_coefficient_thin_airfoil(alpha);
-        assert!((cl - 1.09).abs() < 0.02, "Cl at 10° should be ~1.09, got {cl}");
+        assert!(
+            (cl - 1.09).abs() < 0.02,
+            "Cl at 10° should be ~1.09, got {cl}"
+        );
     }
 
     #[test]
@@ -84,14 +94,20 @@ mod tests {
     #[test]
     fn drag_zero_lift_equals_parasitic() {
         let cd = drag_coefficient(0.02, 0.0, 8.0, 0.8);
-        assert!((cd - 0.02).abs() < f64::EPSILON, "zero-lift drag should equal Cd0");
+        assert!(
+            (cd - 0.02).abs() < f64::EPSILON,
+            "zero-lift drag should equal Cd0"
+        );
     }
 
     #[test]
     fn higher_aspect_ratio_less_induced_drag() {
         let cd_low_ar = drag_coefficient(0.02, 0.5, 4.0, 0.8);
         let cd_high_ar = drag_coefficient(0.02, 0.5, 12.0, 0.8);
-        assert!(cd_high_ar < cd_low_ar, "higher AR should have less induced drag");
+        assert!(
+            cd_high_ar < cd_low_ar,
+            "higher AR should have less induced drag"
+        );
     }
 
     #[test]
@@ -104,7 +120,10 @@ mod tests {
     fn max_ld_ratio_typical_glider() {
         // Cd0=0.01, AR=20, e=0.85 → (L/D)max ≈ 36.5
         let ld_max = max_lift_to_drag_ratio(0.01, 20.0, 0.85);
-        assert!(ld_max > 30.0 && ld_max < 40.0, "glider L/D max should be ~36, got {ld_max}");
+        assert!(
+            ld_max > 30.0 && ld_max < 40.0,
+            "glider L/D max should be ~36, got {ld_max}"
+        );
     }
 
     // --- Edge cases ---
@@ -112,19 +131,28 @@ mod tests {
     #[test]
     fn drag_coefficient_zero_aspect_ratio() {
         let cd = drag_coefficient(0.02, 0.5, 0.0, 0.8);
-        assert!((cd - 0.02).abs() < f64::EPSILON, "zero AR should return just Cd0");
+        assert!(
+            (cd - 0.02).abs() < f64::EPSILON,
+            "zero AR should return just Cd0"
+        );
     }
 
     #[test]
     fn drag_coefficient_zero_oswald() {
         let cd = drag_coefficient(0.02, 0.5, 8.0, 0.0);
-        assert!((cd - 0.02).abs() < f64::EPSILON, "zero Oswald should return just Cd0");
+        assert!(
+            (cd - 0.02).abs() < f64::EPSILON,
+            "zero Oswald should return just Cd0"
+        );
     }
 
     #[test]
     fn drag_coefficient_negative_ar() {
         let cd = drag_coefficient(0.02, 0.5, -5.0, 0.8);
-        assert!((cd - 0.02).abs() < f64::EPSILON, "negative AR should return just Cd0");
+        assert!(
+            (cd - 0.02).abs() < f64::EPSILON,
+            "negative AR should return just Cd0"
+        );
     }
 
     #[test]
@@ -143,7 +171,10 @@ mod tests {
     fn cl_at_max_ld_typical() {
         // Cd0=0.02, AR=8, e=0.8 → Cl_opt = √(π×0.8×8×0.02) ≈ 0.634
         let cl = cl_at_max_ld(0.02, 8.0, 0.8);
-        assert!((cl - 0.634).abs() < 0.01, "Cl at max L/D should be ~0.634, got {cl}");
+        assert!(
+            (cl - 0.634).abs() < 0.01,
+            "Cl at max L/D should be ~0.634, got {cl}"
+        );
     }
 
     #[test]
@@ -155,7 +186,10 @@ mod tests {
         let cd_opt = drag_coefficient(cd0, cl_opt, ar, e);
         let ld = lift_to_drag_ratio(cl_opt, cd_opt);
         let ld_max = max_lift_to_drag_ratio(cd0, ar, e);
-        assert!((ld - ld_max).abs() < 0.01, "L/D at Cl_opt should equal max L/D: {ld} vs {ld_max}");
+        assert!(
+            (ld - ld_max).abs() < 0.01,
+            "L/D at Cl_opt should equal max L/D: {ld} vs {ld_max}"
+        );
     }
 
     #[test]
@@ -163,6 +197,9 @@ mod tests {
         let alpha = (-5.0_f64).to_radians();
         let cl = lift_coefficient_thin_airfoil(alpha);
         assert!(cl < 0.0, "negative AoA should produce negative Cl");
-        assert!((cl + 0.548).abs() < 0.01, "magnitude should match positive 5°");
+        assert!(
+            (cl + 0.548).abs() < 0.01,
+            "magnitude should match positive 5°"
+        );
     }
 }

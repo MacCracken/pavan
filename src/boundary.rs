@@ -4,7 +4,9 @@
 #[must_use]
 #[inline]
 pub fn blasius_thickness(x: f64, reynolds_x: f64) -> f64 {
-    if reynolds_x <= 0.0 { return 0.0; }
+    if reynolds_x <= 0.0 {
+        return 0.0;
+    }
     5.0 * x / reynolds_x.sqrt()
 }
 
@@ -14,7 +16,9 @@ pub fn blasius_thickness(x: f64, reynolds_x: f64) -> f64 {
 #[must_use]
 #[inline]
 pub fn turbulent_thickness(x: f64, reynolds_x: f64) -> f64 {
-    if reynolds_x <= 0.0 { return 0.0; }
+    if reynolds_x <= 0.0 {
+        return 0.0;
+    }
     0.37 * x / reynolds_x.powf(0.2)
 }
 
@@ -34,7 +38,9 @@ pub fn is_turbulent(reynolds: f64) -> bool {
 #[must_use]
 #[inline]
 pub fn skin_friction_laminar(reynolds_x: f64) -> f64 {
-    if reynolds_x <= 0.0 { return 0.0; }
+    if reynolds_x <= 0.0 {
+        return 0.0;
+    }
     0.664 / reynolds_x.sqrt()
 }
 
@@ -44,7 +50,9 @@ pub fn skin_friction_laminar(reynolds_x: f64) -> f64 {
 #[must_use]
 #[inline]
 pub fn skin_friction_turbulent(reynolds_x: f64) -> f64 {
-    if reynolds_x <= 0.0 { return 0.0; }
+    if reynolds_x <= 0.0 {
+        return 0.0;
+    }
     0.027 / reynolds_x.powf(1.0 / 7.0)
 }
 
@@ -56,7 +64,10 @@ mod tests {
     fn blasius_basic() {
         // x=1m, Re=100000 → δ = 5/316 ≈ 0.0158m
         let delta = blasius_thickness(1.0, 100_000.0);
-        assert!((delta - 0.0158).abs() < 0.001, "Blasius thickness should be ~0.016m, got {delta}");
+        assert!(
+            (delta - 0.0158).abs() < 0.001,
+            "Blasius thickness should be ~0.016m, got {delta}"
+        );
     }
 
     #[test]
@@ -64,7 +75,10 @@ mod tests {
         let re = 1_000_000.0;
         let lam = blasius_thickness(1.0, re);
         let turb = turbulent_thickness(1.0, re);
-        assert!(turb > lam, "turbulent BL should be thicker than laminar at same Re");
+        assert!(
+            turb > lam,
+            "turbulent BL should be thicker than laminar at same Re"
+        );
     }
 
     #[test]
@@ -115,7 +129,10 @@ mod tests {
         let re = 500_000.0;
         let d1 = blasius_thickness(1.0, re);
         let d2 = blasius_thickness(2.0, re);
-        assert!((d2 / d1 - 2.0).abs() < 1e-10, "Blasius thickness should scale linearly with x");
+        assert!(
+            (d2 / d1 - 2.0).abs() < 1e-10,
+            "Blasius thickness should scale linearly with x"
+        );
     }
 
     #[test]
@@ -124,19 +141,28 @@ mod tests {
         let re = TRANSITION_REYNOLDS;
         let lam = blasius_thickness(1.0, re);
         let turb = turbulent_thickness(1.0, re);
-        assert!(turb > lam, "turbulent should be thicker even at transition point");
+        assert!(
+            turb > lam,
+            "turbulent should be thicker even at transition point"
+        );
     }
 
     #[test]
     fn skin_friction_known_values() {
         // Blasius Cf at Re=1e6: 0.664/1000 = 6.64e-4
         let cf = skin_friction_laminar(1_000_000.0);
-        assert!((cf - 6.64e-4).abs() < 1e-5, "Cf_lam at Re=1M should be ~6.64e-4, got {cf}");
+        assert!(
+            (cf - 6.64e-4).abs() < 1e-5,
+            "Cf_lam at Re=1M should be ~6.64e-4, got {cf}"
+        );
     }
 
     #[test]
     fn is_turbulent_at_boundary() {
-        assert!(!is_turbulent(TRANSITION_REYNOLDS), "exactly at transition should be laminar");
+        assert!(
+            !is_turbulent(TRANSITION_REYNOLDS),
+            "exactly at transition should be laminar"
+        );
         assert!(is_turbulent(TRANSITION_REYNOLDS + 1.0));
     }
 }

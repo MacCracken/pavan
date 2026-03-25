@@ -6,19 +6,26 @@
 //! aerodynamic forces, boundary layer analysis, and wind field modeling.
 //! Built on [`hisab`] for math.
 
-pub mod error;
-pub mod atmosphere;
 pub mod airfoil;
-pub mod coefficients;
-pub mod forces;
+pub mod atmosphere;
 pub mod boundary;
-pub mod wind;
+pub mod coefficients;
+pub mod error;
+pub mod forces;
 pub mod vehicle;
+pub mod wind;
 
 #[cfg(feature = "logging")]
 pub mod logging;
 
+pub use atmosphere::{
+    dynamic_pressure, mach_number, speed_of_sound, standard_density, standard_pressure,
+    standard_temperature,
+};
+pub use coefficients::{drag_coefficient, lift_coefficient_thin_airfoil};
 pub use error::{PavanError, Result};
-pub use atmosphere::{standard_temperature, standard_pressure, standard_density, dynamic_pressure, speed_of_sound, mach_number};
-pub use coefficients::{lift_coefficient_thin_airfoil, drag_coefficient};
-pub use forces::{lift, drag, reynolds_number, AeroForce};
+pub use forces::{AeroForce, drag, lift, reynolds_number};
+
+pub use airfoil::{NacaProfile, SurfacePoints};
+pub use vehicle::AeroBody;
+pub use wind::WindField;

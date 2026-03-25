@@ -14,6 +14,8 @@ pub const GAMMA: f64 = 1.4;
 pub const G: f64 = 9.80665;
 /// Tropopause altitude (m).
 pub const TROPOPAUSE: f64 = 11_000.0;
+/// Temperature at the tropopause (K) — ISA standard.
+pub const TROPOPAUSE_TEMPERATURE: f64 = 216.65;
 
 /// ISA standard temperature at altitude (troposphere, h < 11000m).
 ///
@@ -24,8 +26,7 @@ pub fn standard_temperature(altitude_m: f64) -> f64 {
     if altitude_m <= TROPOPAUSE {
         SEA_LEVEL_TEMPERATURE - LAPSE_RATE * altitude_m
     } else {
-        // Tropopause: constant 216.65 K
-        216.65
+        TROPOPAUSE_TEMPERATURE
     }
 }
 
@@ -33,6 +34,7 @@ pub fn standard_temperature(altitude_m: f64) -> f64 {
 ///
 /// P = P₀ × (T / T₀)^(g / (L × R))
 #[must_use]
+#[inline]
 pub fn standard_pressure(altitude_m: f64) -> f64 {
     if altitude_m <= TROPOPAUSE {
         let temp_ratio = standard_temperature(altitude_m) / SEA_LEVEL_TEMPERATURE;
@@ -40,8 +42,8 @@ pub fn standard_pressure(altitude_m: f64) -> f64 {
     } else {
         // Above tropopause: exponential decay
         let p_tropo = standard_pressure(TROPOPAUSE);
-        let t_tropo = 216.65;
-        p_tropo * (-(G * (altitude_m - TROPOPAUSE)) / (GAS_CONSTANT_AIR * t_tropo)).exp()
+        p_tropo
+            * (-(G * (altitude_m - TROPOPAUSE)) / (GAS_CONSTANT_AIR * TROPOPAUSE_TEMPERATURE)).exp()
     }
 }
 
@@ -53,7 +55,9 @@ pub fn standard_pressure(altitude_m: f64) -> f64 {
 pub fn standard_density(altitude_m: f64) -> f64 {
     let t = standard_temperature(altitude_m);
     let p = standard_pressure(altitude_m);
-    if t <= 0.0 { return 0.0; }
+    if t <= 0.0 {
+        return 0.0;
+    }
     p / (GAS_CONSTANT_AIR * t)
 }
 
@@ -68,7 +72,9 @@ pub fn dynamic_pressure(density: f64, velocity: f64) -> f64 {
 #[must_use]
 #[inline]
 pub fn speed_of_sound(temperature_k: f64) -> f64 {
-    if temperature_k <= 0.0 { return 0.0; }
+    if temperature_k <= 0.0 {
+        return 0.0;
+    }
     (GAMMA * GAS_CONSTANT_AIR * temperature_k).sqrt()
 }
 
@@ -77,14 +83,19 @@ pub fn speed_of_sound(temperature_k: f64) -> f64 {
 #[inline]
 pub fn mach_number(velocity: f64, temperature_k: f64) -> f64 {
     let a = speed_of_sound(temperature_k);
-    if a <= 0.0 { return 0.0; }
+    if a <= 0.0 {
+        return 0.0;
+    }
     velocity / a
 }
 
 /// Pressure altitude from given pressure (inverse of standard_pressure, troposphere).
 #[must_use]
+#[inline]
 pub fn pressure_altitude(pressure_pa: f64) -> f64 {
-    if pressure_pa <= 0.0 { return 0.0; }
+    if pressure_pa <= 0.0 {
+        return 0.0;
+    }
     let exponent = LAPSE_RATE * GAS_CONSTANT_AIR / G;
     SEA_LEVEL_TEMPERATURE / LAPSE_RATE * (1.0 - (pressure_pa / SEA_LEVEL_PRESSURE).powf(exponent))
 }
@@ -96,25 +107,37 @@ mod tests {
     #[test]
     fn sea_level_temperature() {
         let t = standard_temperature(0.0);
-        assert!((t - 288.15).abs() < 0.01, "sea level T should be 288.15 K, got {t}");
+        assert!(
+            (t - 288.15).abs() < 0.01,
+            "sea level T should be 288.15 K, got {t}"
+        );
     }
 
     #[test]
     fn temperature_at_11km() {
         let t = standard_temperature(11_000.0);
-        assert!((t - 216.65).abs() < 0.01, "tropopause T should be 216.65 K, got {t}");
+        assert!(
+            (t - 216.65).abs() < 0.01,
+            "tropopause T should be 216.65 K, got {t}"
+        );
     }
 
     #[test]
     fn temperature_above_tropopause() {
         let t = standard_temperature(15_000.0);
-        assert!((t - 216.65).abs() < 0.01, "above tropopause T should be constant 216.65 K");
+        assert!(
+            (t - 216.65).abs() < 0.01,
+            "above tropopause T should be constant 216.65 K"
+        );
     }
 
     #[test]
     fn sea_level_pressure_value() {
         let p = standard_pressure(0.0);
-        assert!((p - 101_325.0).abs() < 1.0, "sea level P should be 101325 Pa, got {p}");
+        assert!(
+            (p - 101_325.0).abs() < 1.0,
+            "sea level P should be 101325 Pa, got {p}"
+        );
     }
 
     #[test]
@@ -129,7 +152,10 @@ mod tests {
     #[test]
     fn sea_level_density_value() {
         let rho = standard_density(0.0);
-        assert!((rho - 1.225).abs() < 0.01, "sea level density should be ~1.225, got {rho}");
+        assert!(
+            (rho - 1.225).abs() < 0.01,
+            "sea level density should be ~1.225, got {rho}"
+        );
     }
 
     #[test]
@@ -142,7 +168,10 @@ mod tests {
     #[test]
     fn speed_of_sound_sea_level() {
         let a = speed_of_sound(288.15);
-        assert!((a - 340.3).abs() < 0.5, "speed of sound at sea level should be ~340 m/s, got {a}");
+        assert!(
+            (a - 340.3).abs() < 0.5,
+            "speed of sound at sea level should be ~340 m/s, got {a}"
+        );
     }
 
     #[test]
@@ -150,14 +179,20 @@ mod tests {
         let t = standard_temperature(0.0);
         let a = speed_of_sound(t);
         let m = mach_number(a, t);
-        assert!((m - 1.0).abs() < 0.001, "Mach should be 1.0 at speed of sound, got {m}");
+        assert!(
+            (m - 1.0).abs() < 0.001,
+            "Mach should be 1.0 at speed of sound, got {m}"
+        );
     }
 
     #[test]
     fn subsonic_mach() {
         let t = standard_temperature(0.0);
         let m = mach_number(100.0, t);
-        assert!(m < 1.0, "100 m/s at sea level should be subsonic, got M={m}");
+        assert!(
+            m < 1.0,
+            "100 m/s at sea level should be subsonic, got M={m}"
+        );
     }
 
     #[test]
@@ -165,7 +200,10 @@ mod tests {
         let h = 5000.0;
         let p = standard_pressure(h);
         let h_back = pressure_altitude(p);
-        assert!((h_back - h).abs() < 10.0, "pressure altitude roundtrip should be close, got {h_back}");
+        assert!(
+            (h_back - h).abs() < 10.0,
+            "pressure altitude roundtrip should be close, got {h_back}"
+        );
     }
 
     // --- Edge cases ---
@@ -174,7 +212,10 @@ mod tests {
     fn density_at_tropopause() {
         let rho = standard_density(11_000.0);
         // ISA standard: ~0.3639 kg/m³ at 11km
-        assert!(rho > 0.3 && rho < 0.4, "tropopause density should be ~0.36, got {rho}");
+        assert!(
+            rho > 0.3 && rho < 0.4,
+            "tropopause density should be ~0.36, got {rho}"
+        );
     }
 
     #[test]
@@ -198,7 +239,10 @@ mod tests {
     fn speed_of_sound_at_tropopause() {
         let a = speed_of_sound(216.65);
         // ~295 m/s at tropopause
-        assert!((a - 295.0).abs() < 2.0, "speed of sound at tropopause should be ~295 m/s, got {a}");
+        assert!(
+            (a - 295.0).abs() < 2.0,
+            "speed of sound at tropopause should be ~295 m/s, got {a}"
+        );
     }
 
     #[test]
@@ -237,7 +281,10 @@ mod tests {
             let p = standard_pressure(h);
             let rho = standard_density(h);
             let p_check = rho * GAS_CONSTANT_AIR * t;
-            assert!((p - p_check).abs() / p < 1e-6, "ideal gas law violated at {h}m");
+            assert!(
+                (p - p_check).abs() / p < 1e-6,
+                "ideal gas law violated at {h}m"
+            );
         }
     }
 
@@ -245,6 +292,9 @@ mod tests {
     fn mach_supersonic() {
         let t = standard_temperature(0.0);
         let m = mach_number(500.0, t);
-        assert!(m > 1.0, "500 m/s at sea level should be supersonic, got M={m}");
+        assert!(
+            m > 1.0,
+            "500 m/s at sea level should be supersonic, got M={m}"
+        );
     }
 }

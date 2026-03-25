@@ -1,7 +1,18 @@
 use serde::{Deserialize, Serialize};
 
+/// Surface coordinate list: Vec of (x, y) points normalized to chord = 1.
+pub type SurfacePoints = Vec<(f64, f64)>;
+
+/// NACA 4-digit thickness distribution coefficients.
+const NACA_A0: f64 = 0.2969;
+const NACA_A1: f64 = 0.1260;
+const NACA_A2: f64 = 0.3516;
+const NACA_A3: f64 = 0.2843;
+const NACA_A4: f64 = 0.1015;
+
 /// NACA 4-digit airfoil profile.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct NacaProfile {
     /// Maximum camber as fraction of chord (first digit / 100).
     pub max_camber: f64,
@@ -14,6 +25,7 @@ pub struct NacaProfile {
 impl NacaProfile {
     /// Create from NACA 4 digits (e.g., 2412 → camber=0.02, pos=0.4, thickness=0.12).
     #[must_use]
+    #[inline]
     pub fn from_digits(d1: u8, d2: u8, d3: u8, d4: u8) -> Self {
         Self {
             max_camber: d1 as f64 / 100.0,
@@ -24,15 +36,21 @@ impl NacaProfile {
 
     /// NACA 0012 — symmetric, 12% thickness.
     #[must_use]
-    pub fn naca0012() -> Self { Self::from_digits(0, 0, 1, 2) }
+    pub fn naca0012() -> Self {
+        Self::from_digits(0, 0, 1, 2)
+    }
 
     /// NACA 2412 — 2% camber at 40% chord, 12% thickness.
     #[must_use]
-    pub fn naca2412() -> Self { Self::from_digits(2, 4, 1, 2) }
+    pub fn naca2412() -> Self {
+        Self::from_digits(2, 4, 1, 2)
+    }
 
     /// NACA 4415 — 4% camber at 40% chord, 15% thickness.
     #[must_use]
-    pub fn naca4415() -> Self { Self::from_digits(4, 4, 1, 5) }
+    pub fn naca4415() -> Self {
+        Self::from_digits(4, 4, 1, 5)
+    }
 
     /// Is this a symmetric airfoil (zero camber)?
     #[must_use]
@@ -45,7 +63,7 @@ impl NacaProfile {
     ///
     /// Returns (upper_points, lower_points), each as Vec<(x, y)> normalized to chord = 1.
     #[must_use]
-    pub fn surface_coordinates(&self, num_points: usize) -> (Vec<(f64, f64)>, Vec<(f64, f64)>) {
+    pub fn surface_coordinates(&self, num_points: usize) -> (SurfacePoints, SurfacePoints) {
         let mut upper = Vec::with_capacity(num_points);
         let mut lower = Vec::with_capacity(num_points);
         let t = self.max_thickness;
@@ -54,13 +72,10 @@ impl NacaProfile {
             let x = i as f64 / (num_points - 1).max(1) as f64;
 
             // Thickness distribution (NACA formula)
-            let yt = 5.0 * t * (
-                0.2969 * x.sqrt()
-                - 0.1260 * x
-                - 0.3516 * x * x
-                + 0.2843 * x * x * x
-                - 0.1015 * x * x * x * x
-            );
+            let yt = 5.0
+                * t
+                * (NACA_A0 * x.sqrt() - NACA_A1 * x - NACA_A2 * x * x + NACA_A3 * x * x * x
+                    - NACA_A4 * x * x * x * x);
 
             if self.is_symmetric() {
                 upper.push((x, yt));
@@ -119,7 +134,10 @@ mod tests {
         let (upper, lower) = profile.surface_coordinates(50);
         // Symmetric: upper y = -lower y at each x
         for (u, l) in upper.iter().zip(lower.iter()) {
-            assert!((u.1 + l.1).abs() < 1e-10, "symmetric airfoil should have y_upper = -y_lower");
+            assert!(
+                (u.1 + l.1).abs() < 1e-10,
+                "symmetric airfoil should have y_upper = -y_lower"
+            );
         }
     }
 
@@ -129,7 +147,10 @@ mod tests {
         let (upper, _lower) = profile.surface_coordinates(50);
         // At ~40% chord, upper surface should be above symmetric position
         let mid = &upper[20]; // ~40% of 50 points
-        assert!(mid.1 > 0.0, "cambered airfoil should have positive y on upper surface");
+        assert!(
+            mid.1 > 0.0,
+            "cambered airfoil should have positive y on upper surface"
+        );
     }
 
     #[test]
@@ -137,7 +158,10 @@ mod tests {
         let profile = NacaProfile::naca0012();
         let (upper, _) = profile.surface_coordinates(100);
         assert!(upper[0].1.abs() < 0.01, "leading edge should be near y=0");
-        assert!(upper.last().unwrap().1.abs() < 0.01, "trailing edge should be near y=0");
+        assert!(
+            upper.last().unwrap().1.abs() < 0.01,
+            "trailing edge should be near y=0"
+        );
     }
 
     #[test]
@@ -154,7 +178,10 @@ mod tests {
         let (upper, lower) = profile.surface_coordinates(100);
         let idx = 30; // 30% chord
         let thickness = upper[idx].1 - lower[idx].1;
-        assert!(thickness > 0.0 && thickness < 0.15, "thickness at 30% should be reasonable, got {thickness}");
+        assert!(
+            thickness > 0.0 && thickness < 0.15,
+            "thickness at 30% should be reasonable, got {thickness}"
+        );
     }
 
     // --- Edge cases ---
@@ -183,7 +210,10 @@ mod tests {
         let (upper, lower) = profile.surface_coordinates(50);
         // Mid-chord points: upper should generally be above lower
         for i in 1..49 {
-            assert!(upper[i].1 > lower[i].1, "upper surface should be above lower at point {i}");
+            assert!(
+                upper[i].1 > lower[i].1,
+                "upper surface should be above lower at point {i}"
+            );
         }
     }
 
@@ -193,9 +223,20 @@ mod tests {
         let thick = NacaProfile::naca4415();
         let (u_thin, l_thin) = thin.surface_coordinates(100);
         let (u_thick, l_thick) = thick.surface_coordinates(100);
-        let max_t_thin: f64 = u_thin.iter().zip(l_thin.iter()).map(|(u, l)| u.1 - l.1).fold(0.0_f64, f64::max);
-        let max_t_thick: f64 = u_thick.iter().zip(l_thick.iter()).map(|(u, l)| u.1 - l.1).fold(0.0_f64, f64::max);
-        assert!(max_t_thick > max_t_thin, "NACA 4415 should be thicker than NACA 0012");
+        let max_t_thin: f64 = u_thin
+            .iter()
+            .zip(l_thin.iter())
+            .map(|(u, l)| u.1 - l.1)
+            .fold(0.0_f64, f64::max);
+        let max_t_thick: f64 = u_thick
+            .iter()
+            .zip(l_thick.iter())
+            .map(|(u, l)| u.1 - l.1)
+            .fold(0.0_f64, f64::max);
+        assert!(
+            max_t_thick > max_t_thin,
+            "NACA 4415 should be thicker than NACA 0012"
+        );
     }
 
     #[test]

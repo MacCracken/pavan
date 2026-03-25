@@ -1,7 +1,15 @@
 use serde::{Deserialize, Serialize};
 
+/// Sutherland reference viscosity (Pa·s) at T_ref.
+const SUTHERLAND_MU_REF: f64 = 1.716e-5;
+/// Sutherland reference temperature (K).
+const SUTHERLAND_T_REF: f64 = 273.15;
+/// Sutherland constant for air (K).
+const SUTHERLAND_S: f64 = 110.4;
+
 /// Aerodynamic forces acting on a body.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct AeroForce {
     pub lift: f64,
     pub drag: f64,
@@ -28,7 +36,9 @@ pub fn drag(dynamic_pressure: f64, reference_area: f64, cd: f64) -> f64 {
 #[must_use]
 #[inline]
 pub fn reynolds_number(density: f64, velocity: f64, length: f64, dynamic_viscosity: f64) -> f64 {
-    if dynamic_viscosity <= 0.0 { return 0.0; }
+    if dynamic_viscosity <= 0.0 {
+        return 0.0;
+    }
     density * velocity * length / dynamic_viscosity
 }
 
@@ -40,15 +50,18 @@ pub fn reynolds_number(density: f64, velocity: f64, length: f64, dynamic_viscosi
 #[must_use]
 #[inline]
 pub fn air_dynamic_viscosity(temperature_k: f64) -> f64 {
-    let mu_ref = 1.716e-5;
-    let t_ref = 273.15;
-    let s = 110.4;
-    if temperature_k <= 0.0 { return mu_ref; }
-    mu_ref * (temperature_k / t_ref).powf(1.5) * (t_ref + s) / (temperature_k + s)
+    if temperature_k <= 0.0 {
+        return SUTHERLAND_MU_REF;
+    }
+    SUTHERLAND_MU_REF
+        * (temperature_k / SUTHERLAND_T_REF).powf(1.5)
+        * (SUTHERLAND_T_REF + SUTHERLAND_S)
+        / (temperature_k + SUTHERLAND_S)
 }
 
 /// Compute full aerodynamic force from flight conditions.
 #[must_use]
+#[inline]
 pub fn compute_aero_force(
     density: f64,
     velocity: f64,
@@ -74,7 +87,10 @@ mod tests {
     fn lift_basic() {
         // q=6125, S=10, Cl=0.5 → L=30625 N
         let l = lift(6125.0, 10.0, 0.5);
-        assert!((l - 30625.0).abs() < 1.0, "lift should be ~30625 N, got {l}");
+        assert!(
+            (l - 30625.0).abs() < 1.0,
+            "lift should be ~30625 N, got {l}"
+        );
     }
 
     #[test]
@@ -107,14 +123,20 @@ mod tests {
     #[test]
     fn air_viscosity_at_sea_level() {
         let mu = air_dynamic_viscosity(288.15);
-        assert!((mu - 1.79e-5).abs() < 0.1e-5, "viscosity at sea level should be ~1.79e-5, got {mu}");
+        assert!(
+            (mu - 1.79e-5).abs() < 0.1e-5,
+            "viscosity at sea level should be ~1.79e-5, got {mu}"
+        );
     }
 
     #[test]
     fn viscosity_increases_with_temperature() {
         let mu_cold = air_dynamic_viscosity(250.0);
         let mu_hot = air_dynamic_viscosity(350.0);
-        assert!(mu_hot > mu_cold, "viscosity should increase with temperature");
+        assert!(
+            mu_hot > mu_cold,
+            "viscosity should increase with temperature"
+        );
     }
 
     #[test]
@@ -151,7 +173,11 @@ mod tests {
         // q = 0.5 * 1.225 * 100² = 6125
         // moment = q * S * chord * Cm = 6125 * 10 * 1.5 * (-0.1) = -9187.5
         let f = compute_aero_force(1.225, 100.0, 10.0, 0.5, 0.05, -0.1, 1.5);
-        assert!((f.moment - (-9187.5)).abs() < 1.0, "moment should be ~-9187.5, got {}", f.moment);
+        assert!(
+            (f.moment - (-9187.5)).abs() < 1.0,
+            "moment should be ~-9187.5, got {}",
+            f.moment
+        );
     }
 
     #[test]
@@ -166,7 +192,10 @@ mod tests {
     fn lift_scales_linearly_with_area() {
         let l1 = lift(6125.0, 10.0, 0.5);
         let l2 = lift(6125.0, 20.0, 0.5);
-        assert!((l2 / l1 - 2.0).abs() < 1e-10, "lift should scale linearly with area");
+        assert!(
+            (l2 / l1 - 2.0).abs() < 1e-10,
+            "lift should scale linearly with area"
+        );
     }
 
     #[test]
@@ -174,6 +203,9 @@ mod tests {
         // At tropopause T=216.65K, μ should be lower than sea level
         let mu_sl = air_dynamic_viscosity(288.15);
         let mu_tropo = air_dynamic_viscosity(216.65);
-        assert!(mu_tropo < mu_sl, "viscosity should be lower at lower temperature");
+        assert!(
+            mu_tropo < mu_sl,
+            "viscosity should be lower at lower temperature"
+        );
     }
 }

@@ -1,4 +1,4 @@
-use pavan::{atmosphere, coefficients, forces, vehicle::AeroBody, wind};
+use pavan::{atmosphere, coefficients, vehicle::AeroBody, wind};
 
 fn main() {
     // ISA atmosphere at 3000m
@@ -22,7 +22,12 @@ fn main() {
     // Light aircraft forces
     let body = AeroBody::light_aircraft();
     let f = body.compute_forces(v, alt, alpha);
-    println!("Light aircraft at {v}m/s, {alt}m: L={:.0}N, D={:.0}N, L/D={:.1}", f.lift, f.drag, f.lift / f.drag);
+    println!(
+        "Light aircraft at {v}m/s, {alt}m: L={:.0}N, D={:.0}N, L/D={:.1}",
+        f.lift,
+        f.drag,
+        f.lift / f.drag
+    );
 
     // Wind profile
     let v_ground = 10.0;

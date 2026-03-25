@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 
 // --- Atmosphere ---
 
@@ -48,19 +48,34 @@ fn bench_lift_coefficient(c: &mut Criterion) {
 
 fn bench_drag_coefficient(c: &mut Criterion) {
     c.bench_function("coefficients/drag_coefficient", |b| {
-        b.iter(|| pavan::coefficients::drag_coefficient(black_box(0.027), black_box(0.548), black_box(7.5), black_box(0.8)));
+        b.iter(|| {
+            pavan::coefficients::drag_coefficient(
+                black_box(0.027),
+                black_box(0.548),
+                black_box(7.5),
+                black_box(0.8),
+            )
+        });
     });
 }
 
 fn bench_max_lift_to_drag_ratio(c: &mut Criterion) {
     c.bench_function("coefficients/max_ld_ratio", |b| {
-        b.iter(|| pavan::coefficients::max_lift_to_drag_ratio(black_box(0.01), black_box(20.0), black_box(0.85)));
+        b.iter(|| {
+            pavan::coefficients::max_lift_to_drag_ratio(
+                black_box(0.01),
+                black_box(20.0),
+                black_box(0.85),
+            )
+        });
     });
 }
 
 fn bench_cl_at_max_ld(c: &mut Criterion) {
     c.bench_function("coefficients/cl_at_max_ld", |b| {
-        b.iter(|| pavan::coefficients::cl_at_max_ld(black_box(0.02), black_box(8.0), black_box(0.8)));
+        b.iter(|| {
+            pavan::coefficients::cl_at_max_ld(black_box(0.02), black_box(8.0), black_box(0.8))
+        });
     });
 }
 
@@ -80,7 +95,14 @@ fn bench_drag(c: &mut Criterion) {
 
 fn bench_reynolds(c: &mut Criterion) {
     c.bench_function("forces/reynolds_number", |b| {
-        b.iter(|| pavan::forces::reynolds_number(black_box(1.225), black_box(50.0), black_box(1.0), black_box(1.8e-5)));
+        b.iter(|| {
+            pavan::forces::reynolds_number(
+                black_box(1.225),
+                black_box(50.0),
+                black_box(1.0),
+                black_box(1.8e-5),
+            )
+        });
     });
 }
 
@@ -92,10 +114,17 @@ fn bench_air_dynamic_viscosity(c: &mut Criterion) {
 
 fn bench_compute_aero_force(c: &mut Criterion) {
     c.bench_function("forces/compute_aero_force", |b| {
-        b.iter(|| pavan::forces::compute_aero_force(
-            black_box(1.225), black_box(100.0), black_box(16.2),
-            black_box(0.548), black_box(0.035), black_box(-0.1), black_box(1.5),
-        ));
+        b.iter(|| {
+            pavan::forces::compute_aero_force(
+                black_box(1.225),
+                black_box(100.0),
+                black_box(16.2),
+                black_box(0.548),
+                black_box(0.035),
+                black_box(-0.1),
+                black_box(1.5),
+            )
+        });
     });
 }
 
@@ -138,13 +167,27 @@ fn bench_skin_friction_turbulent(c: &mut Criterion) {
 
 fn bench_log_wind_profile(c: &mut Criterion) {
     c.bench_function("wind/log_profile", |b| {
-        b.iter(|| pavan::wind::log_wind_profile(black_box(10.0), black_box(50.0), black_box(10.0), black_box(0.03)));
+        b.iter(|| {
+            pavan::wind::log_wind_profile(
+                black_box(10.0),
+                black_box(50.0),
+                black_box(10.0),
+                black_box(0.03),
+            )
+        });
     });
 }
 
 fn bench_power_law_wind_profile(c: &mut Criterion) {
     c.bench_function("wind/power_law_profile", |b| {
-        b.iter(|| pavan::wind::power_law_wind_profile(black_box(10.0), black_box(50.0), black_box(10.0), black_box(0.14)));
+        b.iter(|| {
+            pavan::wind::power_law_wind_profile(
+                black_box(10.0),
+                black_box(50.0),
+                black_box(10.0),
+                black_box(0.14),
+            )
+        });
     });
 }
 

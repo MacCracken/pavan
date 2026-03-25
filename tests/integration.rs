@@ -1,9 +1,9 @@
-use pavan::*;
 use pavan::airfoil::NacaProfile;
-use pavan::vehicle::AeroBody;
-use pavan::forces::{self, AeroForce};
-use pavan::wind::WindField;
 use pavan::boundary;
+use pavan::forces::{self, AeroForce};
+use pavan::vehicle::AeroBody;
+use pavan::wind::WindField;
+use pavan::*;
 
 #[test]
 fn full_flight_computation() {
@@ -11,7 +11,10 @@ fn full_flight_computation() {
     let forces = body.compute_forces(60.0, 2000.0, 5.0_f64.to_radians());
     assert!(forces.lift > 0.0);
     assert!(forces.drag > 0.0);
-    assert!(forces.lift > forces.drag, "L should exceed D at moderate AoA");
+    assert!(
+        forces.lift > forces.drag,
+        "L should exceed D at moderate AoA"
+    );
 }
 
 #[test]
@@ -21,17 +24,25 @@ fn atmosphere_consistency() {
     let rho = atmosphere::standard_density(0.0);
     // Ideal gas check: P = ρRT
     let p_check = rho * atmosphere::GAS_CONSTANT_AIR * t;
-    assert!((p - p_check).abs() < 10.0, "ideal gas law should hold at sea level");
+    assert!(
+        (p - p_check).abs() < 10.0,
+        "ideal gas law should hold at sea level"
+    );
 }
 
 #[test]
 fn airfoil_thickness_reasonable() {
     let profile = NacaProfile::naca0012();
     let (upper, lower) = profile.surface_coordinates(100);
-    let max_thickness: f64 = upper.iter().zip(lower.iter())
+    let max_thickness: f64 = upper
+        .iter()
+        .zip(lower.iter())
         .map(|(u, l)| u.1 - l.1)
         .fold(0.0_f64, f64::max);
-    assert!((max_thickness - 0.12).abs() < 0.02, "NACA 0012 max thickness should be ~12%, got {max_thickness}");
+    assert!(
+        (max_thickness - 0.12).abs() < 0.02,
+        "NACA 0012 max thickness should be ~12%, got {max_thickness}"
+    );
 }
 
 #[test]
@@ -58,7 +69,10 @@ fn atmosphere_to_forces_pipeline() {
     let q = atmosphere::dynamic_pressure(rho, velocity);
 
     assert!(rho > 0.0 && rho < 1.225);
-    assert!(re > 1e6, "Re should be > 1M for aircraft conditions, got {re}");
+    assert!(
+        re > 1e6,
+        "Re should be > 1M for aircraft conditions, got {re}"
+    );
     assert!(q > 0.0);
 
     let cl = lift_coefficient_thin_airfoil(5.0_f64.to_radians());
@@ -77,7 +91,10 @@ fn atmosphere_consistency_at_multiple_altitudes() {
         let rho = atmosphere::standard_density(h);
         let p_check = rho * atmosphere::GAS_CONSTANT_AIR * t;
         let rel_err = (p - p_check).abs() / p;
-        assert!(rel_err < 1e-6, "ideal gas law violated at {h}m: P={p}, ρRT={p_check}");
+        assert!(
+            rel_err < 1e-6,
+            "ideal gas law violated at {h}m: P={p}, ρRT={p_check}"
+        );
     }
 }
 
@@ -91,7 +108,10 @@ fn boundary_layer_with_real_reynolds() {
     let x = 1.0;
 
     let re = forces::reynolds_number(rho, velocity, x, mu);
-    assert!(boundary::is_turbulent(re), "Re at sea level/50m/s should be turbulent");
+    assert!(
+        boundary::is_turbulent(re),
+        "Re at sea level/50m/s should be turbulent"
+    );
 
     let delta_lam = boundary::blasius_thickness(x, re);
     let delta_turb = boundary::turbulent_thickness(x, re);

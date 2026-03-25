@@ -1,10 +1,11 @@
-use serde::{Deserialize, Serialize};
 use crate::atmosphere;
 use crate::coefficients;
 use crate::forces::AeroForce;
+use serde::{Deserialize, Serialize};
 
 /// An aerodynamic body with reference properties.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct AeroBody {
     /// Reference area (m²) — typically wing area for aircraft.
     pub reference_area: f64,
@@ -21,6 +22,7 @@ pub struct AeroBody {
 impl AeroBody {
     /// Typical light aircraft (Cessna 172 class).
     #[must_use]
+    #[inline]
     pub fn light_aircraft() -> Self {
         Self {
             reference_area: 16.2,
@@ -33,6 +35,7 @@ impl AeroBody {
 
     /// High-performance glider.
     #[must_use]
+    #[inline]
     pub fn glider() -> Self {
         Self {
             reference_area: 9.5,
@@ -45,11 +48,18 @@ impl AeroBody {
 
     /// Compute aerodynamic forces at given conditions.
     #[must_use]
-    pub fn compute_forces(&self, velocity: f64, altitude: f64, angle_of_attack_rad: f64) -> AeroForce {
+    #[inline]
+    pub fn compute_forces(
+        &self,
+        velocity: f64,
+        altitude: f64,
+        angle_of_attack_rad: f64,
+    ) -> AeroForce {
         let rho = atmosphere::standard_density(altitude);
         let q = atmosphere::dynamic_pressure(rho, velocity);
         let cl = coefficients::lift_coefficient_thin_airfoil(angle_of_attack_rad);
-        let cd = coefficients::drag_coefficient(self.cd0, cl, self.aspect_ratio, self.oswald_efficiency);
+        let cd =
+            coefficients::drag_coefficient(self.cd0, cl, self.aspect_ratio, self.oswald_efficiency);
 
         AeroForce {
             lift: q * self.reference_area * cl,
@@ -75,7 +85,10 @@ mod tests {
     fn zero_aoa_no_lift() {
         let body = AeroBody::light_aircraft();
         let forces = body.compute_forces(60.0, 0.0, 0.0);
-        assert!(forces.lift.abs() < 1.0, "zero AoA should produce near-zero lift");
+        assert!(
+            forces.lift.abs() < 1.0,
+            "zero AoA should produce near-zero lift"
+        );
     }
 
     #[test]
@@ -89,7 +102,10 @@ mod tests {
 
         let ld_aircraft = f_aircraft.lift / f_aircraft.drag;
         let ld_glider = f_glider.lift / f_glider.drag;
-        assert!(ld_glider > ld_aircraft, "glider should have better L/D ratio");
+        assert!(
+            ld_glider > ld_aircraft,
+            "glider should have better L/D ratio"
+        );
     }
 
     #[test]
@@ -98,7 +114,10 @@ mod tests {
         let alpha = 5.0_f64.to_radians();
         let f_low = body.compute_forces(60.0, 0.0, alpha);
         let f_high = body.compute_forces(60.0, 5000.0, alpha);
-        assert!(f_high.lift < f_low.lift, "lift should decrease with altitude (lower density)");
+        assert!(
+            f_high.lift < f_low.lift,
+            "lift should decrease with altitude (lower density)"
+        );
     }
 
     // --- Edge cases ---
@@ -107,7 +126,10 @@ mod tests {
     fn moment_is_zero_simplified() {
         let body = AeroBody::light_aircraft();
         let f = body.compute_forces(60.0, 0.0, 5.0_f64.to_radians());
-        assert_eq!(f.moment, 0.0, "vehicle compute_forces should produce zero moment (simplified)");
+        assert_eq!(
+            f.moment, 0.0,
+            "vehicle compute_forces should produce zero moment (simplified)"
+        );
     }
 
     #[test]

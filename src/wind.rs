@@ -1,7 +1,15 @@
 use serde::{Deserialize, Serialize};
 
+/// NWS wind chill upper temperature limit (°C).
+const WIND_CHILL_TEMP_LIMIT: f64 = 10.0;
+/// NWS wind chill minimum wind speed (km/h).
+const WIND_CHILL_WIND_LIMIT: f64 = 4.8;
+/// NWS wind chill wind speed exponent.
+const WIND_CHILL_EXPONENT: f64 = 0.16;
+
 /// A uniform wind field.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct WindField {
     /// Wind velocity vector (m/s) in [x, y, z].
     pub velocity: [f64; 3],
@@ -12,9 +20,14 @@ impl WindField {
     ///
     /// Direction in radians: 0 = +x, π/2 = +y.
     #[must_use]
+    #[inline]
     pub fn from_speed_direction(speed: f64, direction_rad: f64) -> Self {
         Self {
-            velocity: [speed * direction_rad.cos(), speed * direction_rad.sin(), 0.0],
+            velocity: [
+                speed * direction_rad.cos(),
+                speed * direction_rad.sin(),
+                0.0,
+            ],
         }
     }
 
@@ -22,7 +35,10 @@ impl WindField {
     #[must_use]
     #[inline]
     pub fn speed(&self) -> f64 {
-        (self.velocity[0] * self.velocity[0] + self.velocity[1] * self.velocity[1] + self.velocity[2] * self.velocity[2]).sqrt()
+        (self.velocity[0] * self.velocity[0]
+            + self.velocity[1] * self.velocity[1]
+            + self.velocity[2] * self.velocity[2])
+            .sqrt()
     }
 }
 
@@ -32,6 +48,7 @@ impl WindField {
 ///
 /// z0 = surface roughness length (m). Typical: grass=0.03, urban=1.0, sea=0.001.
 #[must_use]
+#[inline]
 pub fn log_wind_profile(v_ref: f64, z: f64, z_ref: f64, roughness_length: f64) -> f64 {
     if z <= roughness_length || z_ref <= roughness_length || roughness_length <= 0.0 {
         return 0.0;
@@ -47,18 +64,21 @@ pub fn log_wind_profile(v_ref: f64, z: f64, z_ref: f64, roughness_length: f64) -
 #[must_use]
 #[inline]
 pub fn power_law_wind_profile(v_ref: f64, z: f64, z_ref: f64, alpha: f64) -> f64 {
-    if z <= 0.0 || z_ref <= 0.0 { return 0.0; }
+    if z <= 0.0 || z_ref <= 0.0 {
+        return 0.0;
+    }
     v_ref * (z / z_ref).powf(alpha)
 }
 
 /// Wind chill temperature (NWS formula, valid for T ≤ 10°C and V ≥ 4.8 km/h).
 #[must_use]
+#[inline]
 pub fn wind_chill(temp_celsius: f64, wind_speed_kmh: f64) -> f64 {
-    if temp_celsius > 10.0 || wind_speed_kmh < 4.8 {
+    if temp_celsius > WIND_CHILL_TEMP_LIMIT || wind_speed_kmh < WIND_CHILL_WIND_LIMIT {
         return temp_celsius;
     }
-    let v016 = wind_speed_kmh.powf(0.16);
-    13.12 + 0.6215 * temp_celsius - 11.37 * v016 + 0.3965 * temp_celsius * v016
+    let v_exp = wind_speed_kmh.powf(WIND_CHILL_EXPONENT);
+    13.12 + 0.6215 * temp_celsius - 11.37 * v_exp + 0.3965 * temp_celsius * v_exp
 }
 
 #[cfg(test)]
@@ -67,7 +87,9 @@ mod tests {
 
     #[test]
     fn wind_field_speed() {
-        let w = WindField { velocity: [3.0, 4.0, 0.0] };
+        let w = WindField {
+            velocity: [3.0, 4.0, 0.0],
+        };
         assert!((w.speed() - 5.0).abs() < 0.001);
     }
 
@@ -88,7 +110,10 @@ mod tests {
     #[test]
     fn log_profile_at_reference_height() {
         let v = log_wind_profile(10.0, 10.0, 10.0, 0.03);
-        assert!((v - 10.0).abs() < 0.01, "at reference height, speed should equal reference speed");
+        assert!(
+            (v - 10.0).abs() < 0.01,
+            "at reference height, speed should equal reference speed"
+        );
     }
 
     #[test]
@@ -100,7 +125,10 @@ mod tests {
     #[test]
     fn wind_chill_makes_it_colder() {
         let wc = wind_chill(-10.0, 30.0);
-        assert!(wc < -10.0, "wind chill should be colder than actual temp, got {wc}");
+        assert!(
+            wc < -10.0,
+            "wind chill should be colder than actual temp, got {wc}"
+        );
     }
 
     #[test]
@@ -145,26 +173,40 @@ mod tests {
     #[test]
     fn wind_chill_low_wind_no_effect() {
         let wc = wind_chill(-10.0, 3.0);
-        assert!((wc - (-10.0)).abs() < 0.01, "wind below 4.8 km/h should have no chill effect");
+        assert!(
+            (wc - (-10.0)).abs() < 0.01,
+            "wind below 4.8 km/h should have no chill effect"
+        );
     }
 
     #[test]
     fn wind_chill_known_value() {
         // NWS: -10°C at 30 km/h → approximately -20°C
         let wc = wind_chill(-10.0, 30.0);
-        assert!(wc > -25.0 && wc < -15.0, "wind chill at -10°C/30kmh should be ~-20°C, got {wc}");
+        assert!(
+            wc > -25.0 && wc < -15.0,
+            "wind chill at -10°C/30kmh should be ~-20°C, got {wc}"
+        );
     }
 
     #[test]
     fn wind_field_3d_speed() {
-        let w = WindField { velocity: [1.0, 2.0, 2.0] };
-        assert!((w.speed() - 3.0).abs() < 0.001, "3D magnitude of (1,2,2) should be 3");
+        let w = WindField {
+            velocity: [1.0, 2.0, 2.0],
+        };
+        assert!(
+            (w.speed() - 3.0).abs() < 0.001,
+            "3D magnitude of (1,2,2) should be 3"
+        );
     }
 
     #[test]
     fn wind_from_speed_direction_90_degrees() {
         let w = WindField::from_speed_direction(10.0, std::f64::consts::FRAC_PI_2);
         assert!(w.velocity[0].abs() < 0.001, "x should be ~0 at 90°");
-        assert!((w.velocity[1] - 10.0).abs() < 0.001, "y should be ~10 at 90°");
+        assert!(
+            (w.velocity[1] - 10.0).abs() < 0.001,
+            "y should be ~10 at 90°"
+        );
     }
 }
