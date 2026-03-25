@@ -136,8 +136,9 @@ fn panel_influence(panels: &[Panel], i: usize, j: usize) -> (f64, f64, f64, f64)
     let r1_sq = xi * xi + eta * eta;
     let r2_sq = (xi - sj) * (xi - sj) + eta * eta;
 
-    // Guard against degenerate geometry
+    // Guard against degenerate geometry (control point coincides with panel endpoint)
     if r1_sq < f64::EPSILON || r2_sq < f64::EPSILON {
+        tracing::warn!("degenerate panel influence: control point {i} near panel {j} endpoint");
         return (0.0, 0.0, 0.0, 0.0);
     }
 
@@ -166,6 +167,54 @@ fn panel_influence(panels: &[Panel], i: usize, j: usize) -> (f64, f64, f64, f64)
     let b_t = vx_v * pi.tangent.0 + vy_v * pi.tangent.1;
 
     (a_n, a_t, b_n, b_t)
+}
+
+/// Post-process panel method solution: compute Cp, forces, and moment.
+fn panel_post_process(
+    panels: &[Panel],
+    solution: &[f64],
+    gamma: f64,
+    alpha_rad: f64,
+    a_t_store: &[Vec<f64>],
+    b_t_store: &[Vec<f64>],
+) -> PanelSolution {
+    let n = panels.len();
+    let cos_a = alpha_rad.cos();
+    let sin_a = alpha_rad.sin();
+
+    let mut cp = Vec::with_capacity(n);
+    let mut cn = 0.0;
+    let mut ca = 0.0;
+    let mut cm = 0.0;
+
+    for i in 0..n {
+        let mut vt = cos_a * panels[i].tangent.0 + sin_a * panels[i].tangent.1;
+        for j in 0..n {
+            vt += solution[j] * a_t_store[i][j];
+            vt += gamma * b_t_store[i][j];
+        }
+
+        let cp_i = 1.0 - vt * vt;
+        cp.push(cp_i);
+
+        let dx = panels[i].end.0 - panels[i].start.0;
+        let dy = panels[i].end.1 - panels[i].start.1;
+        cn += cp_i * dx;
+        ca -= cp_i * dy;
+
+        // Moment about quarter-chord: Cm = -∮ Cp·(x - 0.25)·dx (nose-up positive)
+        cm -= cp_i * (panels[i].center.0 - 0.25) * dx;
+    }
+
+    let (cl, cd) = crate::forces::body_to_wind(cn, ca, alpha_rad);
+
+    PanelSolution {
+        cl,
+        cd,
+        cm,
+        cp,
+        gamma,
+    }
 }
 
 /// Solve the Hess-Smith panel method for a single angle of attack.
@@ -244,55 +293,9 @@ pub fn solve(panels: &[Panel], alpha_rad: f64) -> Result<PanelSolution> {
 
     let gamma = solution[n];
 
-    // Compute tangential velocity and Cp at each panel
-    let mut cp = Vec::with_capacity(n);
-    let mut cl = 0.0;
-    let mut cd = 0.0;
-    let mut cm = 0.0;
-
-    for i in 0..n {
-        // Tangential velocity = freestream tangential + source + vortex contributions
-        let mut vt = cos_a * panels[i].tangent.0 + sin_a * panels[i].tangent.1;
-
-        for j in 0..n {
-            vt += solution[j] * a_t_store[i][j];
-            vt += gamma * b_t_store[i][j];
-        }
-
-        let cp_i = 1.0 - vt * vt;
-        cp.push(cp_i);
-
-        // Integrate forces: Cl = -∮ Cp·sin(θ)·ds, Cd = -∮ Cp·cos(θ)·ds (normalized)
-        // Using panel geometry directly:
-        let dx = panels[i].end.0 - panels[i].start.0;
-        let dy = panels[i].end.1 - panels[i].start.1;
-
-        // Force coefficients from pressure integration
-        // Lift direction: perpendicular to freestream
-        // In body frame: Cn = -∮ Cp·dx (normal force), Ca = ∮ Cp·dy (axial force)
-        // Then: Cl = Cn·cos(α) - Ca·sin(α), Cd = Cn·sin(α) + Ca·cos(α)
-        let cn_i = cp_i * dx; // normal force contribution (per unit chord)
-        let ca_i = -cp_i * dy; // axial force contribution
-
-        cl += cn_i;
-        cd += ca_i;
-
-        // Moment about quarter-chord: Cm = -∮ Cp·(x - 0.25)·dx (nose-up positive)
-        let xc = panels[i].center.0;
-        cm -= cp_i * (xc - 0.25) * dx;
-    }
-
-    // Rotate from body to wind frame
-    let cl_wind = cl * cos_a - cd * sin_a;
-    let cd_wind = cl * sin_a + cd * cos_a;
-
-    Ok(PanelSolution {
-        cl: cl_wind,
-        cd: cd_wind,
-        cm,
-        cp,
-        gamma,
-    })
+    Ok(panel_post_process(
+        panels, &solution, gamma, alpha_rad, &a_t_store, &b_t_store,
+    ))
 }
 
 /// Solve the panel method for multiple angles of attack efficiently.
@@ -363,43 +366,9 @@ pub fn solve_multi(panels: &[Panel], alphas: &[f64]) -> Result<Vec<PanelSolution
 
         let gamma = solution[n];
 
-        let mut cp = Vec::with_capacity(n);
-        let mut cl = 0.0;
-        let mut cd = 0.0;
-        let mut cm = 0.0;
-
-        for i in 0..n {
-            let mut vt = cos_a * panels[i].tangent.0 + sin_a * panels[i].tangent.1;
-            for j in 0..n {
-                vt += solution[j] * a_t_store[i][j];
-                vt += gamma * b_t_store[i][j];
-            }
-
-            let cp_i = 1.0 - vt * vt;
-            cp.push(cp_i);
-
-            let dx = panels[i].end.0 - panels[i].start.0;
-            let dy = panels[i].end.1 - panels[i].start.1;
-            let cn_i = cp_i * dx;
-            let ca_i = -cp_i * dy;
-            cl += cn_i;
-            cd += ca_i;
-
-            // Moment about quarter-chord: Cm = -∮ Cp·(x - 0.25)·dx (nose-up positive)
-            let xc = panels[i].center.0;
-            cm -= cp_i * (xc - 0.25) * dx;
-        }
-
-        let cl_wind = cl * cos_a - cd * sin_a;
-        let cd_wind = cl * sin_a + cd * cos_a;
-
-        results.push(PanelSolution {
-            cl: cl_wind,
-            cd: cd_wind,
-            cm,
-            cp,
-            gamma,
-        });
+        results.push(panel_post_process(
+            panels, &solution, gamma, alpha, &a_t_store, &b_t_store,
+        ));
     }
 
     Ok(results)

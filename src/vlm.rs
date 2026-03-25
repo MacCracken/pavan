@@ -245,6 +245,9 @@ pub fn generate_panels(wing: &WingGeometry) -> Vec<VlmPanel> {
             let normal = if normal_len > f64::EPSILON {
                 normal / normal_len
             } else {
+                tracing::warn!(
+                    "degenerate VLM panel at span index {i_span}, chord index {i_chord}: zero normal"
+                );
                 DVec3::Z
             };
 
@@ -324,6 +327,100 @@ fn horseshoe_influence(panel: &VlmPanel, control: DVec3, far_field: f64) -> DVec
     v_left + v_bound + v_right
 }
 
+/// Post-process VLM solution: compute CL, CDi, Cm, span loading, Oswald efficiency.
+#[allow(clippy::needless_range_loop)]
+fn vlm_post_process(
+    panels: &[VlmPanel],
+    gamma: Vec<f64>,
+    wing: &WingGeometry,
+    v_inf: f64,
+) -> VlmSolution {
+    let s_ref = wing.reference_area();
+    let q_inf = 0.5 * v_inf * v_inf;
+    let ar = wing.aspect_ratio();
+    let half_span = wing.span * 0.5;
+    let n_span_total = 2 * wing.n_span;
+    let n_chord = wing.n_chord;
+
+    // Aggregate circulation per spanwise strip
+    let mut strip_gamma = vec![0.0; n_span_total];
+    for i_span in 0..n_span_total {
+        for i_chord in 0..n_chord {
+            strip_gamma[i_span] += gamma[i_span * n_chord + i_chord];
+        }
+    }
+
+    // Lift and moment via Kutta-Joukowski
+    let mut cl_total = 0.0;
+    let mut cm_total = 0.0;
+    let mut span_cl = Vec::with_capacity(n_span_total);
+
+    for i_span in 0..n_span_total {
+        let idx0 = i_span * n_chord;
+        let dy = panels[idx0].dy;
+        let local_chord: f64 = (0..n_chord).map(|ic| panels[idx0 + ic].chord).sum();
+
+        let cl_section = if local_chord > 0.0 && q_inf > 0.0 {
+            strip_gamma[i_span] * v_inf / (q_inf * local_chord)
+        } else {
+            0.0
+        };
+        span_cl.push(cl_section);
+
+        let dcl = strip_gamma[i_span] * dy * v_inf / (q_inf * s_ref);
+        cl_total += dcl;
+
+        let x_cp = panels[idx0].control_point.x;
+        let mac = 0.5 * (wing.root_chord + wing.tip_chord);
+        cm_total -= x_cp * dcl / mac;
+    }
+
+    // Induced drag via Trefftz plane trailing vortex sheet
+    let mut trail_gamma = Vec::with_capacity(n_span_total + 1);
+    trail_gamma.push(strip_gamma[0]);
+    for j in 0..n_span_total - 1 {
+        trail_gamma.push(strip_gamma[j + 1] - strip_gamma[j]);
+    }
+    trail_gamma.push(-strip_gamma[n_span_total - 1]);
+
+    let mut trail_y = Vec::with_capacity(n_span_total + 1);
+    for j in 0..=n_span_total {
+        let eta = (j as f64 / n_span_total as f64) * 2.0 - 1.0;
+        trail_y.push(eta * half_span);
+    }
+
+    let mut cdi_total = 0.0;
+    for i_span in 0..n_span_total {
+        let idx0 = i_span * n_chord;
+        let y_i = panels[idx0].control_point.y;
+        let dy = panels[idx0].dy;
+
+        let mut w_i = 0.0;
+        for j in 0..trail_gamma.len() {
+            let dist = y_i - trail_y[j];
+            if dist.abs() > 1e-10 {
+                w_i -= trail_gamma[j] / (4.0 * PI * dist);
+            }
+        }
+        cdi_total -= strip_gamma[i_span] * w_i * dy / (q_inf * s_ref);
+    }
+
+    let oswald = if cdi_total.abs() > f64::EPSILON && ar > 0.0 {
+        cl_total * cl_total / (PI * ar * cdi_total)
+    } else {
+        1.0
+    };
+
+    VlmSolution {
+        cl: cl_total,
+        cdi: cdi_total,
+        cm: cm_total,
+        span_cl,
+        circulation: gamma,
+        oswald_efficiency: oswald,
+    }
+}
+
 /// Solve the VLM for a single angle of attack.
 ///
 /// Panels should be generated from [`generate_panels`]. Freestream velocity
@@ -370,107 +467,7 @@ pub fn solve(
     let gamma = hisab::num::lu_solve(&lu, &pivot, &rhs)
         .map_err(|e| PavanError::ComputationError(format!("VLM LU solve failed: {e}")))?;
 
-    // Post-process: compute forces via Kutta-Joukowski
-    let s_ref = wing.reference_area();
-    let q_inf = 0.5 * v_inf * v_inf; // per unit density
-    let ar = wing.aspect_ratio();
-    let half_span = wing.span * 0.5;
-
-    let n_span_total = 2 * wing.n_span;
-    let n_chord = wing.n_chord;
-
-    // Aggregate circulation per spanwise strip (sum chordwise panels)
-    let mut strip_gamma = vec![0.0; n_span_total];
-    for i_span in 0..n_span_total {
-        for i_chord in 0..n_chord {
-            let idx = i_span * n_chord + i_chord;
-            strip_gamma[i_span] += gamma[idx];
-        }
-    }
-
-    // Lift: Kutta-Joukowski L' = ρ·V∞·Γ per span station
-    // CL = Σ Γ_i · dy_i / (q·S) = Σ Γ_i · dy_i / (0.5·V²·S)
-    let mut cl_total = 0.0;
-    let mut cm_total = 0.0;
-    let mut span_cl = Vec::with_capacity(n_span_total);
-
-    for i_span in 0..n_span_total {
-        let idx0 = i_span * n_chord;
-        let dy = panels[idx0].dy;
-        let local_chord: f64 = (0..n_chord).map(|ic| panels[idx0 + ic].chord).sum();
-
-        // Section lift coefficient
-        let cl_section = if local_chord > 0.0 && q_inf > 0.0 {
-            strip_gamma[i_span] * v_inf / (q_inf * local_chord)
-        } else {
-            0.0
-        };
-        span_cl.push(cl_section);
-
-        // Contribution to total CL
-        let dcl = strip_gamma[i_span] * dy * v_inf / (q_inf * s_ref);
-        cl_total += dcl;
-
-        // Moment about root LE: Cm = -Σ x_cp · dCL
-        let x_cp = panels[idx0].control_point.x;
-        let mac = 0.5 * (wing.root_chord + wing.tip_chord);
-        cm_total -= x_cp * dcl / mac;
-    }
-
-    // Induced drag via Trefftz plane downwash.
-    // Trailing vortex sheet has strength dΓ/dy at each strip boundary.
-    // Downwash: w(y_i) = -1/(4π) · Σ_j (ΔΓ_j / (y_i - y_j))
-    // where ΔΓ_j is the trailing vortex strength at boundary j.
-    // CDi = -1/(q·S) · Σ_i Γ_i · w_i · Δy_i
-
-    // Compute trailing vortex strengths at strip boundaries
-    let mut trail_gamma = Vec::with_capacity(n_span_total + 1);
-    trail_gamma.push(strip_gamma[0]); // left tip: full circulation shed
-    for j in 0..n_span_total - 1 {
-        trail_gamma.push(strip_gamma[j + 1] - strip_gamma[j]);
-    }
-    trail_gamma.push(-strip_gamma[n_span_total - 1]); // right tip
-
-    // Boundary y-positions
-    let mut trail_y = Vec::with_capacity(n_span_total + 1);
-    for j in 0..=n_span_total {
-        let eta = (j as f64 / n_span_total as f64) * 2.0 - 1.0;
-        trail_y.push(eta * half_span);
-    }
-
-    let mut cdi_total = 0.0;
-    for i_span in 0..n_span_total {
-        let idx0 = i_span * n_chord;
-        let y_i = panels[idx0].control_point.y;
-        let dy = panels[idx0].dy;
-
-        // Downwash from trailing vortex sheet
-        let mut w_i = 0.0;
-        for j in 0..trail_gamma.len() {
-            let dist = y_i - trail_y[j];
-            if dist.abs() > 1e-10 {
-                w_i -= trail_gamma[j] / (4.0 * PI * dist);
-            }
-        }
-
-        cdi_total -= strip_gamma[i_span] * w_i * dy / (q_inf * s_ref);
-    }
-
-    // Oswald efficiency: e = CL² / (π·AR·CDi)
-    let oswald = if cdi_total.abs() > f64::EPSILON && ar > 0.0 {
-        cl_total * cl_total / (PI * ar * cdi_total)
-    } else {
-        1.0
-    };
-
-    Ok(VlmSolution {
-        cl: cl_total,
-        cdi: cdi_total,
-        cm: cm_total,
-        span_cl,
-        circulation: gamma,
-        oswald_efficiency: oswald,
-    })
+    Ok(vlm_post_process(panels, gamma, wing, v_inf))
 }
 
 /// Solve VLM for multiple angles of attack efficiently.
@@ -519,89 +516,7 @@ pub fn solve_multi(
         let gamma = hisab::num::lu_solve(&lu, &pivot, &rhs)
             .map_err(|e| PavanError::ComputationError(format!("VLM LU solve failed: {e}")))?;
 
-        // Reuse post-processing from solve()
-        let s_ref = wing.reference_area();
-        let q_inf = 0.5 * v_inf * v_inf;
-        let ar = wing.aspect_ratio();
-        let half_span = wing.span * 0.5;
-        let n_span_total = 2 * wing.n_span;
-        let n_chord = wing.n_chord;
-
-        let mut strip_gamma = vec![0.0; n_span_total];
-        for i_span in 0..n_span_total {
-            for i_chord in 0..n_chord {
-                strip_gamma[i_span] += gamma[i_span * n_chord + i_chord];
-            }
-        }
-
-        let mut cl_total = 0.0;
-        let mut cm_total = 0.0;
-        let mut span_cl = Vec::with_capacity(n_span_total);
-
-        for i_span in 0..n_span_total {
-            let idx0 = i_span * n_chord;
-            let dy = panels[idx0].dy;
-            let local_chord: f64 = (0..n_chord).map(|ic| panels[idx0 + ic].chord).sum();
-
-            let cl_section = if local_chord > 0.0 && q_inf > 0.0 {
-                strip_gamma[i_span] * v_inf / (q_inf * local_chord)
-            } else {
-                0.0
-            };
-            span_cl.push(cl_section);
-
-            let dcl = strip_gamma[i_span] * dy * v_inf / (q_inf * s_ref);
-            cl_total += dcl;
-
-            let x_cp = panels[idx0].control_point.x;
-            let mac = 0.5 * (wing.root_chord + wing.tip_chord);
-            cm_total -= x_cp * dcl / mac;
-        }
-
-        // Trailing vortex sheet for CDi (same as solve())
-        let mut trail_gamma_m = Vec::with_capacity(n_span_total + 1);
-        trail_gamma_m.push(strip_gamma[0]);
-        for j in 0..n_span_total - 1 {
-            trail_gamma_m.push(strip_gamma[j + 1] - strip_gamma[j]);
-        }
-        trail_gamma_m.push(-strip_gamma[n_span_total - 1]);
-
-        let mut trail_y_m = Vec::with_capacity(n_span_total + 1);
-        for j in 0..=n_span_total {
-            let eta = (j as f64 / n_span_total as f64) * 2.0 - 1.0;
-            trail_y_m.push(eta * half_span);
-        }
-
-        let mut cdi_total = 0.0;
-        for i_span in 0..n_span_total {
-            let idx0 = i_span * n_chord;
-            let y_i = panels[idx0].control_point.y;
-            let dy = panels[idx0].dy;
-
-            let mut w_i = 0.0;
-            for j in 0..trail_gamma_m.len() {
-                let dist = y_i - trail_y_m[j];
-                if dist.abs() > 1e-10 {
-                    w_i -= trail_gamma_m[j] / (4.0 * PI * dist);
-                }
-            }
-            cdi_total -= strip_gamma[i_span] * w_i * dy / (q_inf * s_ref);
-        }
-
-        let oswald = if cdi_total.abs() > f64::EPSILON && ar > 0.0 {
-            cl_total * cl_total / (PI * ar * cdi_total)
-        } else {
-            1.0
-        };
-
-        results.push(VlmSolution {
-            cl: cl_total,
-            cdi: cdi_total,
-            cm: cm_total,
-            span_cl,
-            circulation: gamma,
-            oswald_efficiency: oswald,
-        });
+        results.push(vlm_post_process(panels, gamma, wing, v_inf));
     }
 
     Ok(results)

@@ -79,6 +79,21 @@ pub fn compute_aero_force(
     }
 }
 
+/// Rotate force coefficients from body frame (normal/axial) to wind frame (lift/drag).
+///
+/// Cn = normal force coefficient (positive up in body frame).
+/// Ca = axial force coefficient (positive aft in body frame).
+/// Returns (Cl, Cd) in the wind frame.
+#[must_use]
+#[inline]
+pub fn body_to_wind(cn: f64, ca: f64, alpha_rad: f64) -> (f64, f64) {
+    let cos_a = alpha_rad.cos();
+    let sin_a = alpha_rad.sin();
+    let cl = cn * cos_a - ca * sin_a;
+    let cd = cn * sin_a + ca * cos_a;
+    (cl, cd)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

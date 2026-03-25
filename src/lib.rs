@@ -29,7 +29,7 @@ pub use atmosphere::{
 };
 pub use coefficients::{drag_coefficient, lift_coefficient_thin_airfoil};
 pub use error::{PavanError, Result};
-pub use forces::{AeroForce, drag, lift, reynolds_number};
+pub use forces::{AeroForce, body_to_wind, drag, lift, reynolds_number};
 
 pub use airfoil::{NacaProfile, SurfacePoints};
 pub use panel::{Panel, PanelSolution};
