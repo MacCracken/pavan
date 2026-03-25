@@ -11,7 +11,11 @@ pavan
 ├── forces.rs       — lift, drag, Reynolds, Sutherland viscosity, AeroForce
 ├── boundary.rs     — Blasius/turbulent BL thickness, transition, skin friction
 ├── wind.rs         — WindField, log/power law profiles, wind chill
-└── vehicle.rs      — AeroBody presets, altitude-dependent force computation
+├── vehicle.rs      — AeroBody presets, altitude-dependent force computation
+├── panel.rs        — 2D Hess-Smith panel method (Cp, Cl, Cd, Cm)
+├── vlm.rs          — 3D Vortex Lattice Method (span loading, CDi, Oswald e)
+├── cfd.rs          — pravash N-S integration (feature: cfd)
+└── logging.rs      — tracing init (feature: logging)
 ```
 
 ## Consumers

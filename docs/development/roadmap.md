@@ -1,9 +1,5 @@
 # Pavan Roadmap
 
-## Status
-
-**v0.1.0** — Initial scaffold with real aerodynamics implementations.
-
 ## Future Features (demand-gated)
 
 ### Compressible Flow
@@ -11,11 +7,6 @@
 - Normal/oblique shock relations
 - Isentropic flow tables
 - Fanno/Rayleigh flow
-
-### Panel Methods
-- 2D panel method (Hess-Smith)
-- Vortex lattice method for 3D wings
-- Induced drag from circulation distribution
 
 ### Stability & Control
 - Longitudinal static stability (neutral point)
@@ -27,9 +18,7 @@
 - Propeller efficiency model
 - Jet engine thrust lapse with altitude
 
-### CFD Integration (pravash)
-- Couple with pravash Navier-Stokes solver
-- Pressure/velocity field visualization data for soorat
+### CFD Integration (remaining)
 - Boundary layer mesh generation
 
 ## v1.0.0 Criteria
