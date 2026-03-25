@@ -17,9 +17,10 @@ pub const TROPOPAUSE: f64 = 11_000.0;
 /// Temperature at the tropopause (K) — ISA standard.
 pub const TROPOPAUSE_TEMPERATURE: f64 = 216.65;
 
-/// ISA standard temperature at altitude (troposphere, h < 11000m).
+/// ISA standard temperature at altitude.
 ///
-/// T = 288.15 - 0.0065 × h
+/// Troposphere (h ≤ 11 km): T = 288.15 - 0.0065 × h
+/// Stratosphere (h > 11 km): T = 216.65 K (constant)
 #[must_use]
 #[inline]
 pub fn standard_temperature(altitude_m: f64) -> f64 {
@@ -30,9 +31,10 @@ pub fn standard_temperature(altitude_m: f64) -> f64 {
     }
 }
 
-/// ISA standard pressure at altitude (troposphere).
+/// ISA standard pressure at altitude.
 ///
-/// P = P₀ × (T / T₀)^(g / (L × R))
+/// Troposphere (h ≤ 11 km): P = P₀ × (T / T₀)^(g / (L × R))
+/// Stratosphere (h > 11 km): exponential decay from tropopause pressure
 #[must_use]
 #[inline]
 pub fn standard_pressure(altitude_m: f64) -> f64 {
