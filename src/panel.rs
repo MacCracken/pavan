@@ -604,6 +604,11 @@ mod tests {
     // --- Error cases ---
 
     #[test]
+    fn solve_multi_too_few_panels_errors() {
+        assert!(solve_multi(&[], &[0.0]).is_err());
+    }
+
+    #[test]
     fn too_few_panels_errors() {
         let panels = vec![Panel {
             start: (0.0, 0.0),

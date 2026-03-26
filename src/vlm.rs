@@ -798,6 +798,61 @@ mod tests {
         assert!(e > 0.5 && e < 1.5, "e should be reasonable, got {e}");
     }
 
+    // --- Guard clause coverage ---
+
+    #[test]
+    fn total_panels_count() {
+        let wing = WingGeometry::rectangular(6.0, 1.0, 10, 3);
+        assert_eq!(wing.total_panels(), 60);
+    }
+
+    #[test]
+    fn zero_span_area_and_ar() {
+        let wing = WingGeometry::rectangular(0.0, 1.0, 5, 2);
+        assert_eq!(wing.reference_area(), 0.0);
+        assert_eq!(wing.aspect_ratio(), 0.0);
+    }
+
+    #[test]
+    fn solve_zero_velocity_errors() {
+        let (wing, panels) = rect_wing(6, 2);
+        assert!(solve(&panels, &wing, 0.0, 0.0).is_err());
+    }
+
+    #[test]
+    fn solve_multi_zero_velocity_errors() {
+        let (wing, panels) = rect_wing(6, 2);
+        assert!(solve_multi(&panels, &wing, &[0.0], 0.0).is_err());
+    }
+
+    #[test]
+    fn solve_multi_too_few_panels_errors() {
+        let wing = WingGeometry::rectangular(6.0, 1.0, 1, 1);
+        assert!(solve_multi(&[], &wing, &[0.0], 1.0).is_err());
+    }
+
+    #[test]
+    fn biot_savart_coincident_endpoints() {
+        // a == b → zero-length segment
+        let v = biot_savart_segment(
+            DVec3::new(1.0, 1.0, 0.0),
+            DVec3::new(0.0, 0.0, 0.0),
+            DVec3::new(0.0, 0.0, 0.0),
+        );
+        assert_eq!(v, DVec3::ZERO);
+    }
+
+    #[test]
+    fn biot_savart_point_near_endpoint() {
+        let v = biot_savart_segment(
+            DVec3::new(1e-15, 0.0, 0.0),
+            DVec3::new(0.0, 0.0, 0.0),
+            DVec3::new(1.0, 0.0, 0.0),
+        );
+        // Should return zero due to core cutoff
+        assert_eq!(v, DVec3::ZERO);
+    }
+
     #[test]
     fn wing_geometry_serde() {
         let wing = WingGeometry::rectangular(6.0, 1.0, 10, 2);

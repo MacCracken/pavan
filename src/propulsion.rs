@@ -193,6 +193,39 @@ mod tests {
 
     // ── Jet ──
 
+    // --- Guard clause coverage ---
+
+    #[test]
+    fn jet_thrust_extreme_altitude_zero() {
+        let t = jet_thrust_at_altitude(50000.0, 100_000.0, 1.0);
+        assert!(t >= 0.0);
+    }
+
+    #[test]
+    fn advance_ratio_zero_diameter() {
+        assert_eq!(advance_ratio(50.0, 40.0, 0.0), 0.0);
+    }
+
+    #[test]
+    fn propeller_thrust_zero_eta() {
+        assert_eq!(propeller_thrust(150_000.0, 0.0, 50.0), 0.0);
+    }
+
+    #[test]
+    fn propeller_efficiency_negative_j() {
+        assert_eq!(propeller_efficiency(-1.0, 0.85, 5.0), 0.0);
+    }
+
+    #[test]
+    fn propeller_thrust_zero_velocity() {
+        assert_eq!(propeller_thrust(150_000.0, 0.8, 0.0), 0.0);
+    }
+
+    #[test]
+    fn froude_efficiency_zero_area() {
+        assert_eq!(froude_efficiency(2400.0, 50.0, 0.0), 0.0);
+    }
+
     #[test]
     fn jet_thrust_sea_level() {
         let t = jet_thrust_at_altitude(50000.0, 0.0, 0.7);

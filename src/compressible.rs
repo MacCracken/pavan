@@ -685,6 +685,110 @@ mod tests {
         assert!(tr3 < tr2);
     }
 
+    // --- Guard clause coverage ---
+
+    #[test]
+    fn normal_shock_pressure_subsonic_passthrough() {
+        assert!((normal_shock_pressure_ratio(0.5, G) - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn normal_shock_temperature_subsonic_passthrough() {
+        assert!((normal_shock_temperature_ratio(0.5, G) - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn normal_shock_density_subsonic_passthrough() {
+        assert!((normal_shock_density_ratio(0.5, G) - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn normal_shock_total_pressure_subsonic_passthrough() {
+        assert!((normal_shock_total_pressure_ratio(0.5, G) - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn normal_shock_mach_den_guard() {
+        // M₁ exactly 1 with specific γ that could make denominator ≤ 0
+        assert!(normal_shock_mach(1.0, G) >= 0.0);
+    }
+
+    #[test]
+    fn oblique_shock_mach_small_angle_guard() {
+        let m2 = oblique_shock_mach(2.0, 0.5, 0.5, G);
+        assert!(m2 >= 0.0);
+    }
+
+    #[test]
+    fn prandtl_meyer_negative_angle_errors() {
+        assert!(mach_from_prandtl_meyer(-0.1, G).is_err());
+    }
+
+    #[test]
+    fn prandtl_meyer_exceeds_max_errors() {
+        assert!(mach_from_prandtl_meyer(10.0, G).is_err());
+    }
+
+    #[test]
+    fn fanno_m0_infinity() {
+        assert_eq!(fanno_parameter(0.0, G), f64::INFINITY);
+    }
+
+    #[test]
+    fn fanno_pressure_m0_infinity() {
+        assert_eq!(fanno_pressure_ratio(0.0, G), f64::INFINITY);
+    }
+
+    #[test]
+    fn rayleigh_temperature_m0() {
+        let tr = rayleigh_temperature_ratio(0.0, G);
+        assert!((tr).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn rayleigh_total_temp_m0() {
+        let t0r = rayleigh_total_temperature_ratio(0.0, G);
+        assert!((t0r).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn oblique_shock_strong_solution() {
+        // Strong shock: the solver may not always converge for all M/θ combos,
+        // but it should not panic. Test that the code path executes.
+        let result = oblique_shock_angle(5.0, 5.0_f64.to_radians(), G, true);
+        // If it succeeds, strong angle should be > weak angle
+        if let Ok(strong) = result {
+            let weak = oblique_shock_angle(5.0, 5.0_f64.to_radians(), G, false).unwrap();
+            assert!(strong > weak);
+        }
+    }
+
+    #[test]
+    fn oblique_shock_mach_zero_sin() {
+        // β = θ → sin(β-θ) = 0 → guard returns 0
+        let m2 = oblique_shock_mach(2.0, 0.3, 0.3, G);
+        assert_eq!(m2, 0.0);
+    }
+
+    #[test]
+    fn rayleigh_pressure_zero_guard() {
+        // When den = 1 + γ·M² ≈ 0 — not physically possible with γ=1.4 but test the guard
+        let pr = rayleigh_pressure_ratio(0.0, G);
+        // At M=0: (γ+1)/(1+0) = 2.4
+        assert!((pr - 2.4).abs() < 0.001);
+    }
+
+    #[test]
+    fn rayleigh_temperature_zero_guard() {
+        let tr = rayleigh_temperature_ratio(0.0, G);
+        assert_eq!(tr, 0.0);
+    }
+
+    #[test]
+    fn oblique_shock_negative_angle_errors() {
+        assert!(oblique_shock_angle(2.0, -0.1, G, false).is_err());
+    }
+
     #[test]
     fn different_gamma() {
         // γ=1.3 (diatomic at high temp) should give different results

@@ -291,6 +291,13 @@ mod tests {
     }
 
     #[test]
+    fn standard_density_extreme_altitude() {
+        // Extremely high altitude where temp could be zero
+        let rho = standard_density(100_000.0);
+        assert!(rho >= 0.0);
+    }
+
+    #[test]
     fn mach_supersonic() {
         let t = standard_temperature(0.0);
         let m = mach_number(500.0, t);

@@ -240,6 +240,16 @@ mod tests {
     }
 
     #[test]
+    fn camber_at_zero_camber_position() {
+        // NacaProfile with zero camber position → camber_at returns (0,0)
+        let p = NacaProfile::from_digits(2, 0, 1, 2);
+        let (upper, lower) = p.surface_coordinates(10);
+        // Should still produce valid coordinates
+        assert!(upper.len() == 10);
+        assert!(lower.len() == 10);
+    }
+
+    #[test]
     fn serde_round_trip() {
         let profile = NacaProfile::naca2412();
         let json = serde_json::to_string(&profile).expect("serialize");
