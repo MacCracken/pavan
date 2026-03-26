@@ -528,6 +528,89 @@ pub fn init_from_panel(
     Ok(())
 }
 
+/// Estimate boundary layer grid spacing requirements for an airfoil CFD simulation.
+///
+/// Returns recommended first cell height (m) and number of BL cells based on
+/// Reynolds number and desired y+ value.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct BlMeshParams {
+    /// First cell height normal to the surface (m).
+    pub first_cell_height: f64,
+    /// Recommended number of cells across the boundary layer.
+    pub bl_cells: usize,
+    /// Growth ratio between successive cells (typically 1.1-1.3).
+    pub growth_ratio: f64,
+    /// Estimated boundary layer thickness (m).
+    pub bl_thickness: f64,
+}
+
+/// Compute boundary layer mesh parameters for a given flight condition.
+///
+/// Uses flat-plate estimates from `boundary.rs` to determine grid spacing.
+/// `y_plus_target` is the desired y+ at the wall (1.0 for DNS, 30-50 for wall functions).
+#[must_use]
+pub fn bl_mesh_params(
+    chord: f64,
+    velocity: f64,
+    altitude: f64,
+    y_plus_target: f64,
+    growth_ratio: f64,
+) -> BlMeshParams {
+    let rho = crate::atmosphere::standard_density(altitude);
+    let temp = crate::atmosphere::standard_temperature(altitude);
+    let mu = crate::forces::air_dynamic_viscosity(temp);
+    let nu = if rho > 0.0 { mu / rho } else { 1.46e-5 };
+
+    // Reynolds number at trailing edge
+    let re = if nu > 0.0 { velocity * chord / nu } else { 1e6 };
+
+    // Boundary layer thickness at trailing edge (turbulent for Re > 500k, else laminar)
+    let bl_thickness = if re > crate::boundary::TRANSITION_REYNOLDS {
+        crate::boundary::turbulent_thickness(chord, re)
+    } else {
+        crate::boundary::blasius_thickness(chord, re)
+    };
+
+    // Skin friction coefficient for wall shear estimate
+    let cf = if re > crate::boundary::TRANSITION_REYNOLDS {
+        crate::boundary::skin_friction_turbulent(re)
+    } else {
+        crate::boundary::skin_friction_laminar(re)
+    };
+
+    // Wall shear stress: τ_w = 0.5 × Cf × ρ × V²
+    let tau_w = 0.5 * cf * rho * velocity * velocity;
+
+    // Friction velocity: u_τ = √(τ_w/ρ)
+    let u_tau = if rho > 0.0 { (tau_w / rho).sqrt() } else { 1.0 };
+
+    // First cell height: y₁ = y⁺ × ν / u_τ
+    let first_cell = if u_tau > 0.0 {
+        y_plus_target * nu / u_tau
+    } else {
+        1e-5
+    };
+
+    // Number of cells to span BL with geometric growth
+    let gr = growth_ratio.max(1.01);
+    let bl_cells = if first_cell > 0.0 && bl_thickness > first_cell {
+        // Sum of geometric series: h₁ × (r^n - 1)/(r - 1) = δ
+        // n = ln(1 + δ(r-1)/h₁) / ln(r)
+        let n = (1.0 + bl_thickness * (gr - 1.0) / first_cell).ln() / gr.ln();
+        (n.ceil() as usize).max(5)
+    } else {
+        10
+    };
+
+    BlMeshParams {
+        first_cell_height: first_cell,
+        bl_cells,
+        growth_ratio: gr,
+        bl_thickness,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -820,5 +903,48 @@ mod tests {
         }
         assert!(has_up, "upper surface should have upward normals");
         assert!(has_down, "lower surface should have downward normals");
+    }
+
+    // --- BL mesh params ---
+
+    #[test]
+    fn bl_mesh_params_sea_level() {
+        let params = bl_mesh_params(1.0, 50.0, 0.0, 1.0, 1.2);
+        assert!(
+            params.first_cell_height > 0.0,
+            "first cell should be positive"
+        );
+        assert!(
+            params.first_cell_height < 0.001,
+            "first cell should be very small for y+=1"
+        );
+        assert!(params.bl_cells >= 5);
+        assert!(params.bl_thickness > 0.0);
+    }
+
+    #[test]
+    fn bl_mesh_params_wall_function() {
+        // y+ = 30 → much larger first cell
+        let p1 = bl_mesh_params(1.0, 50.0, 0.0, 1.0, 1.2);
+        let p30 = bl_mesh_params(1.0, 50.0, 0.0, 30.0, 1.2);
+        assert!(p30.first_cell_height > p1.first_cell_height * 10.0);
+    }
+
+    #[test]
+    fn bl_mesh_params_higher_re_thinner_first_cell() {
+        let p_slow = bl_mesh_params(1.0, 10.0, 0.0, 1.0, 1.2);
+        let p_fast = bl_mesh_params(1.0, 100.0, 0.0, 1.0, 1.2);
+        assert!(
+            p_fast.first_cell_height < p_slow.first_cell_height,
+            "higher Re should need thinner first cell"
+        );
+    }
+
+    #[test]
+    fn bl_mesh_params_serde() {
+        let params = bl_mesh_params(1.0, 50.0, 0.0, 1.0, 1.2);
+        let json = serde_json::to_string(&params).expect("serialize");
+        let back: BlMeshParams = serde_json::from_str(&json).expect("deserialize");
+        assert!((back.first_cell_height - params.first_cell_height).abs() < f64::EPSILON);
     }
 }

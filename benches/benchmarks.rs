@@ -300,7 +300,68 @@ criterion_group!(
     bench_vlm_rect_40x2,
     bench_vlm_tapered_20x2,
     bench_vlm_solve_multi,
+    // compressible
+    bench_isentropic_ratios,
+    bench_normal_shock,
+    bench_oblique_shock_angle,
+    bench_prandtl_meyer,
+    bench_fanno,
 );
+
+// --- Compressible benchmarks ---
+
+fn bench_isentropic_ratios(c: &mut Criterion) {
+    c.bench_function("compressible/isentropic_m2", |b| {
+        b.iter(|| {
+            let m = black_box(2.0);
+            let g = black_box(1.4);
+            (
+                pavan::compressible::isentropic_temperature_ratio(m, g),
+                pavan::compressible::isentropic_pressure_ratio(m, g),
+                pavan::compressible::isentropic_density_ratio(m, g),
+            )
+        });
+    });
+}
+
+fn bench_normal_shock(c: &mut Criterion) {
+    c.bench_function("compressible/normal_shock_m2", |b| {
+        b.iter(|| {
+            let m = black_box(2.0);
+            let g = black_box(1.4);
+            (
+                pavan::compressible::normal_shock_mach(m, g),
+                pavan::compressible::normal_shock_pressure_ratio(m, g),
+                pavan::compressible::normal_shock_total_pressure_ratio(m, g),
+            )
+        });
+    });
+}
+
+fn bench_oblique_shock_angle(c: &mut Criterion) {
+    c.bench_function("compressible/oblique_shock_angle", |b| {
+        b.iter(|| {
+            pavan::compressible::oblique_shock_angle(
+                black_box(2.0),
+                black_box(0.1745),
+                black_box(1.4),
+                black_box(false),
+            )
+        });
+    });
+}
+
+fn bench_prandtl_meyer(c: &mut Criterion) {
+    c.bench_function("compressible/prandtl_meyer_m2", |b| {
+        b.iter(|| pavan::compressible::prandtl_meyer_angle(black_box(2.0), black_box(1.4)));
+    });
+}
+
+fn bench_fanno(c: &mut Criterion) {
+    c.bench_function("compressible/fanno_parameter_m05", |b| {
+        b.iter(|| pavan::compressible::fanno_parameter(black_box(0.5), black_box(1.4)));
+    });
+}
 
 // --- VLM benchmarks ---
 
