@@ -5,21 +5,28 @@
 ### Added
 - **panel** — 2D Hess-Smith panel method (Cp distribution, Cl, Cd, Cm, solve/solve_multi)
 - **vlm** — 3D Vortex Lattice Method (horseshoe vortices, Biot-Savart, span loading, induced drag, Oswald efficiency)
-- **cfd** — pravash Navier-Stokes integration (feature-gated `cfd`), airfoil rasterization, pressure/velocity field access, panel warm-start
+- **compressible** — isentropic flow relations, normal/oblique shock, Prandtl-Meyer expansion, Fanno/Rayleigh duct flow
+- **stability** — longitudinal static stability (neutral point, static margin), flap/elevator effectiveness, trim solver
+- **propulsion** — jet thrust lapse with altitude, TSFC, propeller efficiency (advance ratio model), Froude efficiency
+- **cfd** — pravash Navier-Stokes integration (feature-gated `cfd`), airfoil rasterization, pressure/velocity field access, panel warm-start, boundary layer mesh parameters
+- `body_to_wind()` utility in forces.rs for body→wind frame rotation
 
 ### Changed
 - Dependencies updated: criterion 0.5 → 0.8, pravash 0.24 → 1.0
-- `#[non_exhaustive]` added to all public structs (AeroForce, NacaProfile, AeroBody, WindField)
+- `#[non_exhaustive]` added to all public structs (AeroForce, NacaProfile, AeroBody, WindField, Panel, PanelSolution, VlmSolution, WingGeometry, etc.)
 - `#[inline]` added to all hot-path functions
-- Magic numbers extracted to named constants (NACA coefficients, Sutherland's law, wind chill)
+- Magic numbers extracted to named constants (NACA coefficients, Sutherland's law, wind chill, vortex core cutoff)
 - `SurfacePoints` type alias for airfoil coordinate output
-- `TROPOPAUSE_TEMPERATURE` constant added
+- `TROPOPAUSE_TEMPERATURE` constant added to atmosphere
 - ISA atmosphere docs updated for stratosphere support
-- Re-exports expanded: Panel, PanelSolution, NacaProfile, AeroBody, WindField, WingGeometry, VlmSolution
+- Panel/VLM post-processing extracted into shared helpers (reduced duplication)
+- Re-exports expanded in lib.rs
+- Degenerate geometry now logs tracing warnings instead of silent fallback
 
 ### Fixed
 - Unused `PI` import in atmosphere.rs
 - Unused `forces` import in examples/basic.rs
+- Panel method Cm sign in solve_multi (was `+=`, corrected to `-=`)
 
 ## [0.1.0] - 2026-03-25
 

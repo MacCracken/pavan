@@ -1,30 +1,11 @@
 # Pavan Roadmap
 
-## Future Features (demand-gated)
-
-### Compressible Flow
-- Prandtl-Meyer expansion waves
-- Normal/oblique shock relations
-- Isentropic flow tables
-- Fanno/Rayleigh flow
-
-### Stability & Control
-- Longitudinal static stability (neutral point)
-- Control surface effectiveness (elevator, aileron)
-- Trim calculation
-
-### Propulsion
-- Thrust-specific fuel consumption
-- Propeller efficiency model
-- Jet engine thrust lapse with altitude
-
-### CFD Integration (remaining)
-- Boundary layer mesh generation
+All v0.1.0 roadmap features have been implemented.
 
 ## v1.0.0 Criteria
 - API frozen
-- Zero unwrap/panic in library code
-- 90%+ test coverage
-- ISA values verified against standard tables
-- Benchmark history with golden numbers
-- 3+ downstream consumers
+- Zero unwrap/panic in library code ✓
+- 90%+ test coverage (255 unit + 21 integration)
+- ISA values verified against standard tables ✓
+- Benchmark history with golden numbers (39 benchmarks)
+- 3+ downstream consumers (kiran/joshua, impetus, badal — defined, not yet consuming)
