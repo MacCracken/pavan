@@ -1,6 +1,8 @@
 # Changelog
 
-## [Unreleased]
+## [1.0.0] - 2026-03-25
+
+API frozen. 15 modules, 276 tests (94.27% coverage), 45 benchmarks.
 
 ### Added
 - **panel** — 2D Hess-Smith panel method (Cp distribution, Cl, Cd, Cm, solve/solve_multi)

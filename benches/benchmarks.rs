@@ -306,6 +306,14 @@ criterion_group!(
     bench_oblique_shock_angle,
     bench_prandtl_meyer,
     bench_fanno,
+    // stability
+    bench_neutral_point,
+    bench_flap_effectiveness,
+    bench_trim,
+    // propulsion
+    bench_jet_thrust,
+    bench_propeller_efficiency,
+    bench_compute_thrust,
 );
 
 // --- Compressible benchmarks ---
@@ -360,6 +368,70 @@ fn bench_prandtl_meyer(c: &mut Criterion) {
 fn bench_fanno(c: &mut Criterion) {
     c.bench_function("compressible/fanno_parameter_m05", |b| {
         b.iter(|| pavan::compressible::fanno_parameter(black_box(0.5), black_box(1.4)));
+    });
+}
+
+// --- Stability benchmarks ---
+
+fn bench_neutral_point(c: &mut Criterion) {
+    c.bench_function("stability/neutral_point", |b| {
+        b.iter(|| {
+            pavan::stability::neutral_point(black_box(5.0), black_box(-1.0), black_box(0.25))
+        });
+    });
+}
+
+fn bench_flap_effectiveness(c: &mut Criterion) {
+    c.bench_function("stability/flap_effectiveness", |b| {
+        b.iter(|| pavan::stability::flap_effectiveness(black_box(0.25)));
+    });
+}
+
+fn bench_trim(c: &mut Criterion) {
+    c.bench_function("stability/trim", |b| {
+        b.iter(|| {
+            pavan::stability::trim(
+                black_box(0.5),
+                black_box(0.05),
+                black_box(-1.0),
+                black_box(-1.5),
+                black_box(5.0),
+            )
+        });
+    });
+}
+
+// --- Propulsion benchmarks ---
+
+fn bench_jet_thrust(c: &mut Criterion) {
+    c.bench_function("propulsion/jet_thrust_at_altitude", |b| {
+        b.iter(|| {
+            pavan::propulsion::jet_thrust_at_altitude(
+                black_box(50000.0),
+                black_box(10000.0),
+                black_box(0.7),
+            )
+        });
+    });
+}
+
+fn bench_propeller_efficiency(c: &mut Criterion) {
+    c.bench_function("propulsion/propeller_efficiency", |b| {
+        b.iter(|| {
+            pavan::propulsion::propeller_efficiency(black_box(0.6), black_box(0.85), black_box(5.0))
+        });
+    });
+}
+
+fn bench_compute_thrust(c: &mut Criterion) {
+    let jet = pavan::propulsion::PropulsionType::Jet {
+        thrust_sl: 50000.0,
+        tsfc: 2e-5,
+    };
+    c.bench_function("propulsion/compute_thrust_jet", |b| {
+        b.iter(|| {
+            pavan::propulsion::compute_thrust(black_box(&jet), black_box(250.0), black_box(10000.0))
+        });
     });
 }
 

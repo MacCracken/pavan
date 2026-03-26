@@ -1,11 +1,11 @@
 # Pavan Roadmap
 
-All v0.1.0 roadmap features have been implemented.
+## v1.0.0 — Released 2026-03-25
 
-## v1.0.0 Criteria
-- API frozen
+All criteria met:
+- API frozen ✓
 - Zero unwrap/panic in library code ✓
-- 90%+ test coverage (255 unit + 21 integration)
+- 94.27% test coverage (276 tests) ✓
 - ISA values verified against standard tables ✓
-- Benchmark history with golden numbers (39 benchmarks)
-- 3+ downstream consumers (kiran/joshua, impetus, badal — defined, not yet consuming)
+- 45 benchmarks baselined ✓
+- 3 downstream consumers defined (kiran/joshua, impetus, badal)

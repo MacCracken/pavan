@@ -1,10 +1,10 @@
 [package]
 name = "pavan"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 rust-version = "1.89"
 license = "GPL-3.0"
-description = "Pavan — aerodynamics engine for lift, drag, airflow, airfoils, and boundary layers"
+description = "Pavan — aerodynamics engine for atmosphere, airfoils, panel methods, VLM, compressible flow, stability, propulsion, and CFD"
 homepage = "https://github.com/MacCracken/pavan"
 repository = "https://github.com/MacCracken/pavan"
 readme = "README.md"
