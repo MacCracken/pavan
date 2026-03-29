@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.0]
+
+### Added
+- **bridge** — cross-crate primitive-value bridges for badal (ISA flight conditions, effective airspeed), pravash (Cp to lift, Reynolds number), goonj (aeroacoustic power level, shock noise), ushma (stagnation temperature, heat flux, skin friction to heat)
+- **integration/soorat** — feature-gated `soorat-compat` module with visualization data structures: `PanelMeshVisualization` (pressure-colored panels from solution), `AirfoilProfile` (upper/lower/camber from NACA), `FlowField2D` (velocity + scalar grid), `BoundaryLayerProfile` (thickness/transition along surface), `VortexVisualization` (filament segments with circulation)
+
+### Updated
+- hisab 1.1.0 -> 1.3.0, pravash 1.0.0 -> 1.2.0, zerocopy 0.8.47 -> 0.8.48
+
 ## [1.0.0] - 2026-03-25
 
 API frozen. 15 modules, 276 tests (94.27% coverage), 45 benchmarks.

@@ -9,10 +9,14 @@
 pub mod airfoil;
 pub mod atmosphere;
 pub mod boundary;
+/// Cross-crate bridges — primitive-value conversions from other AGNOS science crates.
+pub mod bridge;
 pub mod coefficients;
 pub mod compressible;
 pub mod error;
 pub mod forces;
+/// Integration APIs for downstream consumers (soorat rendering).
+pub mod integration;
 pub mod panel;
 pub mod propulsion;
 pub mod stability;
